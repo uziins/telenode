@@ -1,5 +1,7 @@
+import Logger from "./logger.js";
 /**
  * @typedef {Object} Handlers
+ * @property {Function} [message]
  * @property {Function} [text]
  * @property {Function} [audio]
  * @property {Function} [document]
@@ -44,9 +46,105 @@
  * @property {Function} [chat_join_request]
  */
 
-module.exports = class Plugin {
-    constructor() {
+export default class Plugin {
+    constructor(listener, bot, config) {
+        this.listener = listener;
         this._handlers = {};
+
+        this.log = new Logger(this.plugin.name, config);
+
+        const events = Object.keys(Plugin.handlers);
+        for (const eventName of events) {
+            const handler = Plugin.handlers[eventName];
+            if (typeof this[handler] !== 'function') continue;
+            const eventHandler = this[handler].bind(this);
+            const wrappedHandler = function({message}) {
+                // TODO: filter blocked chats here, so we don't call the handler
+                eventHandler.apply(null, arguments);
+            };
+            this.listener.on(eventName, wrappedHandler);
+            this._handlers[eventName] = wrappedHandler; // handler reference for later removal
+        }
+
+        /* this.commands can contain an object, mapping command names (e.g. "ping") to either:
+         *
+         *   - a string, in which case the string is sent as a message
+         *   - an object, in which case it is sent with the appropriate message type
+         */
+        const shortcutHandler = ({message, command, args}) => {
+            console.log("shortcutHandler", {message, command, args})
+            if (!this.commands) return;
+            for (const trigger of Object.keys(this.commands)) {
+                if (command !== trigger) continue;
+                const ret = this.commands[trigger]({message, args});
+                if (typeof ret === "string" || typeof ret === "number") {
+                    this.sendMessage(message.chat.id, ret);
+                    return;
+                }
+                if (typeof ret === "undefined")
+                    return;
+                switch (ret.type) {
+                    case "text": {
+                        return this.sendMessage(message.chat.id, ret.text, ret.options);
+                    }
+
+                    case "audio": {
+                        return this.sendAudio(message.chat.id, ret.audio, ret.options);
+                    }
+
+                    case "document": {
+                        return this.sendDocument(message.chat.id, ret.document, ret.options);
+                    }
+
+                    case "photo": {
+                        return this.sendPhoto(message.chat.id, ret.photo, ret.options);
+                    }
+
+                    case "sticker": {
+                        return this.sendSticker(message.chat.id, ret.sticker, ret.options);
+                    }
+
+                    case "video": {
+                        return this.sendVideo(message.chat.id, ret.video, ret.options);
+                    }
+
+                    case "voice": {
+                        return this.sendVoice(message.chat.id, ret.voice, ret.options);
+                    }
+
+                    case "status": case "chatAction": {
+                        return this.sendChatAction(message.chat.id, ret.status, ret.options);
+                    }
+
+                    default: {
+                        const errorMessage = `Unrecognized reply type ${ret.type}`;
+                        this.log.error(errorMessage);
+                        return Promise.reject(errorMessage);
+                    }
+                }
+            }
+        };
+        if (this.listener) {
+            this.listener.on("_command", shortcutHandler);
+        }
+        this.shortcutHandler = shortcutHandler;
+    }
+
+    static get Type() {
+        return {
+            NORMAL: 0x01,
+            INLINE: 0x02,
+            PROXY: 0x04,
+            SPECIAL: 0x08
+        };
+    }
+
+    static get plugin() {
+        return {
+            name: 'Plugin',
+            description: 'Base Plugin',
+            help: 'Don\'t ask for help',
+        }
     }
 
     /**
@@ -54,6 +152,11 @@ module.exports = class Plugin {
      */
     static get handlers() {
         return {
+            message: 'onMessage',
+
+            _command: "onCommand",
+            _inline_command: "onInlineCommand",
+
             text: 'onText',
             audio: 'onAudio',
             document: 'onDocument',
@@ -97,6 +200,22 @@ module.exports = class Plugin {
             chat_member: 'onChatMember',
             my_chat_member: 'onMyChatMember',
             chat_join_request: 'onChatJoinRequest',
+        }
+    }
+
+    get plugin() {
+        return this.constructor.plugin;
+    }
+
+
+    stop() {
+        const eventNames = Object.keys(this._handlers);
+        if (this.listener) {
+            for (const eventName of eventNames) {
+                const handler = this._handlers[eventName];
+                this.listener.removeListener(eventName, handler);
+            }
+            this.listener.removeListener("_command", this.shortcutHandler);
         }
     }
 
