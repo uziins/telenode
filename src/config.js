@@ -30,7 +30,7 @@ export default {
         port: process.env.APP_PORT || 8001,
     },
     BOT_TOKEN: process.env.BOT_TOKEN,
-    BOT_ADMINS: process.env.BOT_ADMINS ? process.env.BOT_ADMINS.split(',') : [],
+    BOT_SUDOERS: process.env.BOT_SUDOERS ? process.env.BOT_SUDOERS.replace(/, +/g, ',').split(',').map(Number) : [],
     db: {
         host: process.env.DB_HOST || 'localhost',
         port: process.env.DB_PORT || 3306,

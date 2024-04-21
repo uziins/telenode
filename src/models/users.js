@@ -1,4 +1,4 @@
-const Model = require("letsql");
+import Model from "letsql";
 
 class Users extends Model {
     constructor() {
@@ -21,4 +21,4 @@ class Users extends Model {
     }
 }
 
-module.exports = Users;
+export default Users;

@@ -4,6 +4,8 @@ import TelegramBot from "node-telegram-bot-api";
 import PluginManager from "./pluginManager.js";
 
 
+import express from "express";
+
 const log = Logger(Config.APP_NAME, Config);
 let bot;
 
@@ -12,7 +14,6 @@ log.info(`${process.env.npm_package_name} version ${process.env.npm_package_vers
 (async () => {
     log.verbose('Starting the bot...')
     if (Config.UPDATE_MODE === 'webhook') {
-        const express = require('express');
         bot = new TelegramBot(Config.BOT_TOKEN);
 
         bot.getWebHookInfo().then(r => {
@@ -47,51 +48,10 @@ log.info(`${process.env.npm_package_name} version ${process.env.npm_package_vers
         console.log('Specify the UPDATE_MODE environment variable. Valid values are "polling" and "webhook"');
         process.exit(1);
     }
-
-    // loadPlugins();
 })();
 
 const pluginMan = new PluginManager(bot, Config);
 pluginMan.loadPlugins();
-// bot.on('message', (msg) => {
-//     console.log(msg)
-//     const chatId = msg.chat.id;
-//     // send keyboard
-//     bot.sendMessage(chatId, 'Received your message', {
-//         // reply_markup: {
-//         //     keyboard: [['Sample text', 'Second sample'], ['Keyboard'], ['I\'m robot']],
-//         //     resize_keyboard: true,
-//         // }
-//     });
-// });
-
-// load plugins. Plugins are located in the plugins directory (ex: plugins/hello/index.js) index.js is the entry point for the plugin
-
-// function loadPlugins() {
-//     const pluginsDir = 'plugins';
-//     fs.readdir(pluginsDir, (err, plugins) => {
-//         if (err) {
-//             console.error('Error reading plugins directory', err);
-//             return;
-//         }
-//
-//         // load each plugin, index.js is the entry point for the plugin
-//         plugins.forEach(plugin => {
-//             const pluginPath = path.join(__dirname, '..', pluginsDir, plugin, 'index.js');
-//             if (fs.existsSync(pluginPath)) {
-//                 const Plugin = require(pluginPath);
-//                 const pluginInstance = new Plugin();
-//                 if (pluginInstance instanceof require('./plugin')) {
-//                     console.log(`Plugin ${plugin} loaded`);``
-//                 } else {
-//                     console.error(`Plugin ${plugin} does not extend the Plugin class`);
-//                 }
-//             } else {
-//                 console.error(`Plugin ${plugin} does not have an index.js file`);
-//             }
-//         });
-//     });
-// }
 
 // on CTRL+C, stop the bot safely
 process.on('SIGINT', () => {

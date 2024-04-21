@@ -1,6 +1,14 @@
 import Plugin from "../../src/plugin.js";
 
 export default class HelloPlugin extends Plugin {
+    static get plugin() {
+        return {
+            name: "Hello",
+            description: "Hello World!",
+            help: "Hello World!"
+        };
+    }
+
     onMessage({message}) {
         console.log(message)
     }

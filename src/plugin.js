@@ -58,7 +58,7 @@ export default class Plugin {
             const handler = Plugin.handlers[eventName];
             if (typeof this[handler] !== 'function') continue;
             const eventHandler = this[handler].bind(this);
-            const wrappedHandler = function({message}) {
+            const wrappedHandler = function ({message}) {
                 // TODO: filter blocked chats here, so we don't call the handler
                 eventHandler.apply(null, arguments);
             };
@@ -72,7 +72,6 @@ export default class Plugin {
          *   - an object, in which case it is sent with the appropriate message type
          */
         const shortcutHandler = ({message, command, args}) => {
-            console.log("shortcutHandler", {message, command, args})
             if (!this.commands) return;
             for (const trigger of Object.keys(this.commands)) {
                 if (command !== trigger) continue;
@@ -112,7 +111,8 @@ export default class Plugin {
                         return this.sendVoice(message.chat.id, ret.voice, ret.options);
                     }
 
-                    case "status": case "chatAction": {
+                    case "status":
+                    case "chatAction": {
                         return this.sendChatAction(message.chat.id, ret.status, ret.options);
                     }
 
@@ -130,20 +130,39 @@ export default class Plugin {
         this.shortcutHandler = shortcutHandler;
     }
 
-    static get Type() {
+    static get VISIBILITY() {
+        return {
+            VISIBLE: 0,
+            HIDDEN: 1
+        };
+    }
+
+    // TODO: tentukan tipe dan kegunaannya
+    static get TYPE() {
         return {
             NORMAL: 0x01,
             INLINE: 0x02,
-            PROXY: 0x04,
-            SPECIAL: 0x08
+            PROXY: 0x03,
+            SPECIAL: 0x04
+        };
+    }
+
+    // TODO: apakah level perlu?
+    static get LEVEL() {
+        return {
+            ROOT: 0x00,
+            ADMIN: 0x01,
+            USER: 0x02,
         };
     }
 
     static get plugin() {
         return {
             name: 'Plugin',
-            description: 'Base Plugin',
+            description: '',
             help: 'Don\'t ask for help',
+            visibility: Plugin.VISIBILITY.VISIBLE,
+            type: Plugin.TYPE.SPECIAL
         }
     }
 
@@ -218,5 +237,4 @@ export default class Plugin {
             this.listener.removeListener("_command", this.shortcutHandler);
         }
     }
-
 }
