@@ -10,15 +10,6 @@ if (!fs.existsSync(envPath)) {
 }
 config();
 
-// check if all required env variables are set
-const requiredEnvVars = ['BOT_TOKEN'];
-if (process.env.UPDATE_MODE === 'webhook') requiredEnvVars.push('WEBHOOK_URL', 'APP_PORT');
-const unsetEnvVars = requiredEnvVars.filter(envVar => !(typeof process.env[envVar] !== 'undefined') || process.env[envVar] === '');
-if (unsetEnvVars.length > 0) {
-    console.error(`Required environment variables are missing: [${unsetEnvVars.join(', ')}]`);
-    process.exit(1);
-}
-
 export default {
     APP_NAME: process.env.APP_NAME || 'TeleNode',
     APP_ENV: process.env.APP_ENV || 'development',
