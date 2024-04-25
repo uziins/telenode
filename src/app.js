@@ -34,7 +34,14 @@ log.info(`${process.env.npm_package_name} version ${process.env.npm_package_vers
         });
 
     } else if (Config.UPDATE_MODE === 'polling') {
-        bot = new TelegramBot(Config.BOT_TOKEN, {polling: true});
+        bot = new TelegramBot(Config.BOT_TOKEN, {
+            polling: true, request: {
+                agentOptions: {
+                    keepAlive: true,
+                    family: 4
+                }
+            }
+        });
 
         await bot.getWebHookInfo().then(r => {
             if (r.url !== '') bot.deleteWebHook().then(r => {
