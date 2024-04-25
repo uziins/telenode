@@ -51,53 +51,74 @@ export default class MasterPlugin extends Plugin {
     async onCallbackQuery({message}) {
         let [cmd, par1, par2] = message.data.split(" ");
         if (cmd === 'su_main') {
-            return this.bot.editMessageReplyMarkup({
-                inline_keyboard: await this.getKeyboards()
-            }, {
+            return this.bot.editMessageText('System Settings', {
                 chat_id: message.message.chat.id,
-                message_id: message.message.message_id
+                message_id: message.message.message_id,
+                reply_markup: {
+                    inline_keyboard: await this.getKeyboards()
+                }
             })
         }
 
         if (cmd === 'su_plugins') {
             if (par1 && par2) {
+                if (par1 === 'detail') {
+                    let plugin = await PluginTbl.getPlugin(par2);
+                    // edit message text with plugin details
+                    return this.bot.editMessageText(`Plugin: ${plugin.name}\nDescription: ${plugin.description}\nHelp: ${plugin.help}`, {
+                        chat_id: message.message.chat.id,
+                        message_id: message.message.message_id,
+                        reply_markup: {
+                            inline_keyboard: await this.getKeyboards('plugin_detail', {plugin, is_active: plugin.is_active})
+                        }
+                    })
+                }
                 if (par1 === 'enable') {
                     await this.pm.loadPlugin(par2)
-                } else {
+                } else if (par1 === 'disable') {
                     await this.pm.unloadPlugin(par2)
                 }
-                return this.bot.editMessageReplyMarkup({
-                    inline_keyboard: await this.getKeyboards('plugins')
-                }, {
-                    chat_id: message.message.chat.id,
-                    message_id: message.message.message_id
-                })
-            } else {
-                return this.bot.editMessageReplyMarkup({
-                    inline_keyboard: await this.getKeyboards('plugins')
-                }, {
-                    chat_id: message.message.chat.id,
-                    message_id: message.message.message_id
-                })
             }
+            return this.bot.editMessageText('Plugin List', {
+                chat_id: message.message.chat.id,
+                message_id: message.message.message_id,
+                reply_markup: {
+                    inline_keyboard: await this.getKeyboards('plugins')
+                }
+            })
         }
     }
 
-    async getKeyboards(page = '') {
+    async getKeyboards(page = '', args = {}) {
         switch (page) {
             case 'plugins':
-                let plugins = await PluginTbl.get();
-                let keyboard = plugins.map(pl => {
-                    let status = pl.is_active ? '☑️' : '✖️';
-                    let command = pl.is_active ? 'disable' : 'enable';
-                    return [
-                        {text: `${pl.name} ${status}`, callback_data: `su_plugins ${command} ${pl.plugin_name}`}
-                    ]
-                })
+                const plugins = await PluginTbl.get();
+                const btnPerRow = 2;
+                let keyboard = [];
+                for (let i = 0; i < plugins.length; i += btnPerRow) {
+                    let row = [];
+                    for (let j = 0; j < btnPerRow; j++) {
+                        let pl = plugins[i + j];
+                        if (!pl) break;
+                        let status = pl.is_active ? '☑️' : '✖️';
+                        let command = 'detail';
+                        row.push({text: `${pl.name} ${status}`, callback_data: `su_plugins ${command} ${pl.plugin_name}`})
+                    }
+                    keyboard.push(row)
+                }
                 keyboard.push([
                     {text: "<< Back", callback_data: "su_main"}
                 ])
                 return keyboard;
+            case 'plugin_detail':
+                return [
+                    [
+                        {text: args.is_active ? 'Disable' : 'Enable', callback_data: `su_plugins ${args.is_active ? 'disable' : 'enable'} ${args.plugin.plugin_name}`},
+                    ],
+                    [
+                        {text: "<< Back", callback_data: "su_plugins"}
+                    ]
+                ]
             default:
                 return [
                     [

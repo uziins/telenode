@@ -20,7 +20,7 @@ class Plugins extends Model {
                 await this.where("plugin_name", name).withTrashed().update({deleted_at: null, is_active: false});
             }
         } else {
-            await this.insert({plugin_name: name, is_active: false});
+            await this.insert({plugin_name: name, name: name, is_active: false});
             row = await this.select().where("plugin_name", name).first();
         }
         return row;

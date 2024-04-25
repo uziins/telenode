@@ -82,7 +82,6 @@ export default class PluginManager {
             const ThePluginModule = await import(pluginPath);
             const pluginInstance = new ThePluginModule.default(this.emitter, this.bot, this.auth);
             if (pluginInstance instanceof Plugin) {
-                console.log(`Plugin ${plugin} loaded`);
                 for (const method of Object.getOwnPropertyNames(Object.getPrototypeOf(this.bot))) {
                     if (typeof this.bot[method] !== "function") continue;
                     if (method === "constructor" || method === "on") continue;
@@ -98,11 +97,13 @@ export default class PluginManager {
                     help: pluginInstance.plugin.help,
                     is_visible: pluginInstance.plugin.visibility === Plugin.VISIBILITY.VISIBLE,
                     is_active: true}).then(r => {});
+
+                this.log.info(`Plugin ${plugin} loaded`);
             } else {
-                console.error(`Plugin ${plugin} does not extend the Plugin class`);
+                this.log.error(`Plugin ${plugin} does not extend the Plugin class`);
             }
         } else {
-            console.error(`Plugin ${plugin} does not have an index.js file`);
+            this.log.error(`Plugin ${plugin} does not have an index.js file`);
         }
     }
 

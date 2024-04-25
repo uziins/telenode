@@ -1,3 +1,5 @@
+// credit: https://github.com/Telegram-Bot-Node/Nikoro
+
 import Logger from "./logger.js";
 /**
  * @typedef {Object} Handlers
