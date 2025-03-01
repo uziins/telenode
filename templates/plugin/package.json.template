@@ -1,0 +1,20 @@
+{
+  "name": "telenode-plugin-{{PLUGIN_NAME}}",
+  "version": "1.0.0",
+  "description": "{{DESCRIPTION}}",
+  "main": "index.js",
+  "type": "module",
+  "keywords": ["telenode", "telegram", "bot", "plugin"],
+  "author": "{{AUTHOR}}",
+  "license": "{{LICENSE}}",
+  "dependencies": {{DEPENDENCIES}},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-repo/telenode-plugin-{{PLUGIN_NAME}}.git"
+  }
+}
+

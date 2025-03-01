@@ -1,0 +1,19 @@
+{
+  "name": "telenode-plugin-echo",
+  "version": "1.0.0",
+  "description": "Echo plugin for TeleNode - repeats user messages",
+  "main": "index.js",
+  "keywords": ["telenode", "telegram", "bot", "plugin", "echo"],
+  "author": "TeleNode",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
+

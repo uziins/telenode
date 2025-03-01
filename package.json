@@ -1,19 +1,31 @@
 {
   "name": "telenode",
-  "version": "1.0.0",
-  "description": "A plugin based Telegram Bot",
+  "version": "2.0.0",
+  "description": "A high-performance plugin-based Telegram Bot framework with advanced monitoring and caching",
   "main": "src/app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
-    "setup": "node src/setup.js"
+    "dev": "nodemon src/app.js --inspect",
+    "health": "curl -f http://localhost:${APP_PORT:-8001}/health || exit 1",
+    "logs": "tail -f logs/*.log",
+    "clean": "rm -rf logs/*.log",
+    "install-plugins": "node bin/plugin-cli.js install",
+    "plugin:create": "node bin/plugin-cli.js create",
+    "plugin:install": "node bin/plugin-cli.js install",
+    "plugin:check": "node bin/plugin-cli.js check",
+    "plugin:list": "node bin/plugin-cli.js list",
+    "plugin:remove": "node bin/plugin-cli.js remove",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop telenode",
+    "pm2:restart": "pm2 restart telenode",
+    "pm2:logs": "pm2 logs telenode"
   },
   "dependencies": {
+    "commander": "^14.0.0",
     "express": "^4.18.3",
     "inquirer": "^9.2.19",
-    "letsql": "^1.0.3",
-    "node-telegram-bot-api": "^0.65.1",
+    "letsql": "^1.2.0",
+    "node-telegram-bot-api": "^0.66.0",
     "winston": "^3.13.0",
     "winston-daily-rotate-file": "^5.0.0"
   },
@@ -21,11 +33,45 @@
     "dotenv": "^16.3.1",
     "nodemon": "^3.0.1"
   },
-  "author": "uziins",
+  "optionalDependencies": {
+    "pm2": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "author": {
+    "name": "uziins",
+    "email": "",
+    "url": ""
+  },
+  "contributors": [
+    {
+      "name": "TeleNode Framework Contributors",
+      "url": "https://github.com/uziins/telenode"
+    }
+  ],
   "license": "MIT",
   "keywords": [
-    "Telegram",
-    "Bot"
+    "telegram",
+    "bot",
+    "framework",
+    "plugin",
+    "nodejs",
+    "monitoring",
+    "performance",
+    "scalable"
   ],
-  "type": "module"
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uziins/telenode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/uziins/telenode/issues"
+  },
+  "homepage": "https://github.com/uziins/telenode#readme",
+  "config": {
+    "unsafe-perm": true
+  }
 }

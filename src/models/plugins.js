@@ -1,5 +1,7 @@
 import Model from "letsql";
 
+import Plugin from "../plugin.js";
+
 class Plugins extends Model {
     constructor() {
         super();
@@ -13,14 +15,42 @@ class Plugins extends Model {
         };
     }
 
-    async getPlugin(name) {
+    async getPlugin(name, pluginDetail=null) {
         let row = await this.select().where("plugin_name", name).withTrashed().first();
         if (row) {
+            let toUpdate = {}
+            if (pluginDetail) {
+                if (row.name !== pluginDetail.name) {
+                    toUpdate.name = pluginDetail.name
+                }
+                if (row.description !== pluginDetail.description) {
+                    toUpdate.description = pluginDetail.description
+                }
+                if (row.help !== pluginDetail.help) {
+                    toUpdate.help = pluginDetail.help
+                }
+
+                if (row.is_visible !== (pluginDetail.visibility === Plugin.VISIBILITY.VISIBLE)) {
+                    toUpdate.is_visible = pluginDetail.visibility === Plugin.VISIBILITY.VISIBLE
+                }
+            }
             if (row.deleted_at) {
-                await this.where("plugin_name", name).withTrashed().update({deleted_at: null, is_active: false});
+                toUpdate.deleted_at = null
+                toUpdate.is_active = false
+            }
+
+            if (Object.keys(toUpdate).length > 0) {
+                await this.where("plugin_name", name).withTrashed().update(toUpdate);
             }
         } else {
-            await this.insert({plugin_name: name, name: name, is_active: false});
+            await this.insert({
+                plugin_name: name,
+                name: pluginDetail ? pluginDetail.name : name,
+                description: pluginDetail ? pluginDetail.description : null,
+                help: pluginDetail ? pluginDetail.help : null,
+                is_visible: pluginDetail ? (pluginDetail.visibility === Plugin.VISIBILITY.VISIBLE) : false,
+                is_active: false
+            });
             row = await this.select().where("plugin_name", name).first();
         }
         return row;

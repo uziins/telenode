@@ -1,0 +1,248 @@
+import Plugin from "../../src/plugin.js";
+
+/**
+ * {{CLASS_NAME}} Plugin
+ * {{DESCRIPTION}}
+ */
+export default class {{CLASS_NAME}}Plugin extends Plugin {
+    static get plugin() {
+        return {
+            name: "{{CLASS_NAME}}",
+            description: "{{DESCRIPTION}}",
+            help: "{{HELP}}",
+            visibility: Plugin.VISIBILITY.USER,
+            version: "1.0.0",
+            author: "{{AUTHOR}}",
+            category: "{{CATEGORY}}"
+        };
+    }
+
+    /**
+     * Plugin commands
+     */
+    get commands() {
+        return {
+            {{COMMAND_NAME}}: this.handle{{CLASS_NAME}}.bind(this),
+            {{COMMAND_NAME}}help: this.handleHelp.bind(this)
+        };
+    }
+
+    /**
+     * Main command handler
+     * @param {Object} params - Command parameters
+     * @param {Object} params.message - Telegram message object
+     * @param {Array} params.args - Command arguments
+     * @returns {string|Object} Response message or typed result
+     */
+    async handle{{CLASS_NAME}}({message, args}) {
+        try {
+            // Simple string return
+            return `🤖 Hello from {{CLASS_NAME}} plugin!\n\nArgs received: ${args.join(' ') || 'none'}`;
+        } catch (error) {
+            this.log.error('Error in handle{{CLASS_NAME}}:', error);
+            return '❌ An error occurred while processing your request.';
+        }
+    }
+
+    /**
+     * Help command handler
+     */
+    async handleHelp({message}) {
+        return `📖 *{{CLASS_NAME}} Plugin Help*\n\n` +
+               `/{{COMMAND_NAME}} - Main command\n` +
+               `/{{COMMAND_NAME}}help - Show this help\n\n` +
+               `{{DESCRIPTION}}`;
+    }
+
+    // ========================================
+    // EVENT HANDLERS (Uncomment as needed)
+    // ========================================
+
+    /**
+     * Handle all incoming messages
+     * @param {Object} params - Event parameters
+     * @param {Object} params.message - Telegram message object
+     */
+    // async onMessage({message}) {
+    //     // Handle any incoming message
+    //     this.log.debug(`Message received from ${message.from?.id}`);
+    // }
+
+    /**
+     * Handle text messages
+     * @param {Object} params - Event parameters
+     * @param {Object} params.message - Telegram message object
+     * @returns {string|Object|null} Response or null to ignore
+     */
+    // onText({message}) {
+    //     // Example: Auto-reply to specific text
+    //     // if (message.text?.toLowerCase() === 'hello') {
+    //     //     return 'Hello there! 👋';
+    //     // }
+    //     return null;
+    // }
+
+    /**
+     * Handle photo messages
+     * @param {Object} params - Event parameters
+     * @param {Object} params.message - Telegram message object with photo
+     * @returns {string|Object|null} Response or null to ignore
+     */
+    // onPhoto({message}) {
+    //     // Example responses:
+    //     // return 'Nice photo! 📸';
+    //     // return {
+    //     //     type: 'text',
+    //     //     text: 'Photo received!',
+    //     //     options: { parse_mode: 'Markdown' }
+    //     // };
+    //     return null;
+    // }
+
+    /**
+     * Handle sticker messages
+     */
+    // onSticker({message}) {
+    //     // return `Cool sticker! ${message.sticker.emoji || '🙂'}`;
+    //     return null;
+    // }
+
+    /**
+     * Handle video messages
+     */
+    // onVideo({message}) {
+    //     // return 'Video received! 🎬';
+    //     return null;
+    // }
+
+    /**
+     * Handle audio messages
+     */
+    // onAudio({message}) {
+    //     // return 'Audio received! 🎵';
+    //     return null;
+    // }
+
+    /**
+     * Handle voice messages
+     */
+    // onVoice({message}) {
+    //     // return 'Voice message received! 🎤';
+    //     return null;
+    // }
+
+    /**
+     * Handle document messages
+     */
+    // onDocument({message}) {
+    //     // const fileName = message.document.file_name || 'Unknown';
+    //     // return `Document received: ${fileName} 📄`;
+    //     return null;
+    // }
+
+    /**
+     * Handle contact messages
+     */
+    // onContact({message}) {
+    //     // const name = message.contact.first_name;
+    //     // return `Contact received: ${name} 📞`;
+    //     return null;
+    // }
+
+    /**
+     * Handle location messages
+     */
+    // onLocation({message}) {
+    //     // const lat = message.location.latitude;
+    //     // const lon = message.location.longitude;
+    //     // return `Location received: ${lat}, ${lon} 📍`;
+    //     return null;
+    // }
+
+    /**
+     * Handle callback queries from inline keyboards
+     * @param {Object} params - Event parameters
+     * @param {Object} params.callbackQuery - Telegram callback query object
+     */
+    // onCallbackQuery({callbackQuery}) {
+    //     // const data = callbackQuery.data;
+    //     // return `Button clicked: ${data}`;
+    //     return null;
+    // }
+
+    /**
+     * Handle inline queries
+     * @param {Object} params - Event parameters
+     * @param {Object} params.inlineQuery - Telegram inline query object
+     */
+    // onInlineQuery({inlineQuery}) {
+    //     // const query = inlineQuery.query;
+    //     // return `Inline query: ${query}`;
+    //     return null;
+    // }
+
+    /**
+     * Handle new chat members
+     */
+    // onNewChatMembers({message}) {
+    //     // const newMembers = message.new_chat_members;
+    //     // const names = newMembers.map(m => m.first_name).join(', ');
+    //     // return `Welcome ${names}! 🎉`;
+    //     return null;
+    // }
+
+    /**
+     * Handle member leaving chat
+     */
+    // onLeftChatMember({message}) {
+    //     // const member = message.left_chat_member;
+    //     // return `Goodbye ${member.first_name}! 👋`;
+    //     return null;
+    // }
+
+    // ========================================
+    // RETURN VALUE EXAMPLES - Quick Reference
+    // ========================================
+    //
+    // 1. Simple string (most common):
+    //    return 'Simple text response';
+    //
+    // 2. Multi-line string:
+    //    return `Line 1\nLine 2\nLine 3`;
+    //
+    // 3. Formatted text with Markdown:
+    //    return {
+    //        type: 'text',
+    //        text: '*Bold* and _italic_ text',
+    //        options: { parse_mode: 'Markdown' }
+    //    };
+    //
+    // 4. Send photo:
+    //    return {
+    //        type: 'photo',
+    //        photo: 'path/to/photo.jpg',
+    //        options: { caption: 'Photo caption' }
+    //    };
+    //
+    // 5. Send document:
+    //    return {
+    //        type: 'document',
+    //        document: 'path/to/file.pdf',
+    //        options: { caption: 'File description' }
+    //    };
+    //
+    // 6. Send sticker:
+    //    return {
+    //        type: 'sticker',
+    //        sticker: 'sticker_file_id'
+    //    };
+    //
+    // 7. Send chat action (typing indicator):
+    //    return {
+    //        type: 'chatAction',
+    //        action: 'typing'
+    //    };
+    //
+    // 8. No response (ignore event):
+    //    return null;
+}

@@ -1,6 +1,7 @@
 // credit: https://github.com/Telegram-Bot-Node/Nikoro
 
 import Logger from "./logger.js";
+
 /**
  * @typedef {Object} Handlers
  * @property {Function} [message]
@@ -49,123 +50,346 @@ import Logger from "./logger.js";
  */
 
 export default class Plugin {
-    constructor(listener, bot, config) {
+    constructor(listener, bot, auth) {
         this.listener = listener;
-        this._handlers = {};
+        this.auth = auth;
+        this._handlers = new Map(); // Use Map for better performance
+        this._isActive = true;
 
-        this.log = new Logger(this.plugin.name, config);
+        // Rate limiting for plugin commands
+        this._commandRateLimit = new Map();
+        this._rateLimitWindow = 60000; // 1 minute
+        this._maxCommandsPerWindow = 30;
 
+        this.log = Logger('', this.plugin.name);
+        this.log.info(`Plugin ${this.plugin.name} initializing...`);
+
+        // Validate plugin configuration
+        this.validatePlugin();
+
+        // Setup event handlers
+        this.setupEventHandlers();
+
+        // Setup command shortcuts
+        this.setupCommandShortcuts();
+
+        this.log.info(`Plugin ${this.plugin.name} loaded successfully`);
+    }
+
+    validatePlugin() {
+        const plugin = this.plugin;
+
+        if (!plugin.name || typeof plugin.name !== 'string') {
+            throw new Error('Plugin must have a valid name');
+        }
+
+        if (!plugin.description || typeof plugin.description !== 'string') {
+            throw new Error('Plugin must have a valid description');
+        }
+
+        // Visibility validation - support both old and new system
+        const validVisibilities = [
+            Plugin.VISIBILITY.VISIBLE, Plugin.VISIBILITY.HIDDEN, // Old system
+            Plugin.VISIBILITY.USER, Plugin.VISIBILITY.ADMIN, Plugin.VISIBILITY.ROOT // New system
+        ];
+
+        if (plugin.visibility === undefined || !validVisibilities.includes(plugin.visibility)) {
+            throw new Error('Plugin must have a valid visibility setting (ROOT, ADMIN, or USER)');
+        }
+    }
+
+    setupEventHandlers() {
         const events = Object.keys(Plugin.handlers);
+
         for (const eventName of events) {
             const handler = Plugin.handlers[eventName];
             if (typeof this[handler] !== 'function') continue;
-            const eventHandler = this[handler].bind(this);
-            const wrappedHandler = function ({message}) {
-                // TODO: filter blocked chats here, so we don't call the handler
-                eventHandler.apply(null, arguments);
-            };
-            this.listener.on(eventName, wrappedHandler);
-            this._handlers[eventName] = wrappedHandler; // handler reference for later removal
-        }
 
-        /* this.commands can contain an object, mapping command names (e.g. "ping") to either:
-         *
-         *   - a string, in which case the string is sent as a message
-         *   - an object, in which case it is sent with the appropriate message type
-         */
-        const shortcutHandler = ({message, command, args}) => {
-            if (!this.commands) return;
-            for (const trigger of Object.keys(this.commands)) {
-                if (command !== trigger) continue;
-                const ret = this.commands[trigger]({message, args});
-                if (typeof ret === "string" || typeof ret === "number") {
-                    this.sendMessage(message.chat.id, ret);
+            const eventHandler = this[handler].bind(this);
+            const wrappedHandler = this.createWrappedHandler(eventHandler, eventName);
+
+            this.listener.on(eventName, wrappedHandler);
+            this._handlers.set(eventName, wrappedHandler);
+        }
+    }
+
+    createWrappedHandler(handler, eventName) {
+        return async (eventData) => {
+            if (!this._isActive) return;
+
+            try {
+                const { message } = eventData;
+
+                // Check authorization
+                if (!await this.auth.isGranted(message)) {
+                    this.log.debug(`Access denied for event ${eventName}`);
                     return;
                 }
-                if (typeof ret === "undefined")
+
+                // Rate limiting for commands
+                if (eventName === '_command' && !this.checkRateLimit(message)) {
+                    this.log.warn(`Rate limit exceeded for user ${message.from?.id}`);
                     return;
-                switch (ret.type) {
-                    case "text": {
-                        return this.sendMessage(message.chat.id, ret.text, ret.options);
-                    }
+                }
 
-                    case "audio": {
-                        return this.sendAudio(message.chat.id, ret.audio, ret.options);
-                    }
+                // Execute handler with timeout and capture result
+                const result = await this.executeWithTimeout(handler, eventData, 30000);
 
-                    case "document": {
-                        return this.sendDocument(message.chat.id, ret.document, ret.options);
-                    }
+                // Auto-handle result for non-command events (NEW FEATURE)
+                if (eventName !== '_command' && result !== undefined && result !== null && message?.chat?.id) {
+                    await this.handleEventResult(result, message, eventName);
+                }
 
-                    case "photo": {
-                        return this.sendPhoto(message.chat.id, ret.photo, ret.options);
-                    }
+            } catch (error) {
+                this.log.error(`Error in ${eventName} handler:`, error);
 
-                    case "sticker": {
-                        return this.sendSticker(message.chat.id, ret.sticker, ret.options);
-                    }
-
-                    case "video": {
-                        return this.sendVideo(message.chat.id, ret.video, ret.options);
-                    }
-
-                    case "voice": {
-                        return this.sendVoice(message.chat.id, ret.voice, ret.options);
-                    }
-
-                    case "status":
-                    case "chatAction": {
-                        return this.sendChatAction(message.chat.id, ret.status, ret.options);
-                    }
-
-                    default: {
-                        const errorMessage = `Unrecognized reply type ${ret.type}`;
-                        this.log.error(errorMessage);
-                        return Promise.reject(errorMessage);
+                // Send error notification to user if it's a command
+                if (eventName === '_command' && message?.chat?.id) {
+                    try {
+                        await this.sendMessage(message.chat.id,
+                            '❌ An error occurred while processing your command.');
+                    } catch (sendError) {
+                        this.log.error('Failed to send error message:', sendError);
                     }
                 }
             }
         };
-        if (this.listener) {
-            this.listener.on("_command", shortcutHandler);
-        }
-        this.shortcutHandler = shortcutHandler;
     }
 
+    async executeWithTimeout(handler, data, timeout) {
+        return new Promise(async (resolve, reject) => {
+            const timer = setTimeout(() => {
+                reject(new Error(`Handler timeout after ${timeout}ms`));
+            }, timeout);
+
+            try {
+                const result = await handler(data);
+                clearTimeout(timer);
+                resolve(result);
+            } catch (error) {
+                clearTimeout(timer);
+                reject(error);
+            }
+        });
+    }
+
+    checkRateLimit(message) {
+        if (!message?.from?.id) return true;
+
+        const userId = message.from.id;
+        const now = Date.now();
+        const windowStart = now - this._rateLimitWindow;
+
+        if (!this._commandRateLimit.has(userId)) {
+            this._commandRateLimit.set(userId, []);
+        }
+
+        const userCommands = this._commandRateLimit.get(userId);
+        const recentCommands = userCommands.filter(time => time > windowStart);
+
+        if (recentCommands.length >= this._maxCommandsPerWindow) {
+            return false;
+        }
+
+        recentCommands.push(now);
+        this._commandRateLimit.set(userId, recentCommands);
+
+        return true;
+    }
+
+    setupCommandShortcuts() {
+        if (!this.commands) {
+            this.log.debug(`Plugin ${this.plugin.name} has no commands, skipping command shortcuts setup`);
+            return;
+        }
+
+        this.log.info(`Setting up command shortcuts for plugin ${this.plugin.name}, commands: [${Object.keys(this.commands).join(', ')}]`);
+
+        const shortcutHandler = async ({message, command, args}) => {
+            this.log.info(`🎯 SHORTCUT HANDLER TRIGGERED: Plugin "${this.plugin.name}" received command "${command}" from user ${message.from?.id}`);
+
+            if (!this._isActive || !this.commands) return;
+
+            // Debug logging untuk semua command yang masuk
+            this.log.info(`Command received: "${command}" from user ${message.from?.id} in chat ${message.chat?.id}`);
+
+            try {
+                if (!await this.auth.isGranted(message)) {
+                    this.log.warn(`Access denied for command "${command}" from user ${message.from?.id}`);
+                    return;
+                }
+
+                // Find matching command (case-insensitive)
+                const commandKey = Object.keys(this.commands)
+                    .find(key => key.toLowerCase() === command.toLowerCase());
+
+                if (!commandKey) {
+                    this.log.debug(`Command "${command}" not found in plugin ${this.plugin.name}`);
+                    return;
+                }
+
+                this.log.info(`Executing command "${commandKey}" in plugin ${this.plugin.name}`);
+
+                const commandHandler = this.commands[commandKey];
+
+                if (typeof commandHandler !== 'function') {
+                    this.log.warn(`Command ${commandKey} is not a function`);
+                    return;
+                }
+
+                const result = await this.executeWithTimeout(
+                    () => commandHandler({message, args}),
+                    null,
+                    30000
+                );
+
+                this.log.info(`Command "${commandKey}" executed successfully, result type: ${typeof result}`);
+                await this.handleCommandResult(result, message);
+
+            } catch (error) {
+                this.log.error(`Error executing command ${command}:`, error);
+
+                if (message?.chat?.id) {
+                    try {
+                        await this.sendMessage(message.chat.id,
+                            '❌ Command execution failed.');
+                    } catch (sendError) {
+                        this.log.error('Failed to send command error message:', sendError);
+                    }
+                }
+            }
+        };
+
+        if (this.listener) {
+            this.log.info(`Registering _command event listener for plugin ${this.plugin.name}`);
+            this.listener.on("_command", shortcutHandler);
+            this._handlers.set("_command_shortcut", shortcutHandler);
+        } else {
+            this.log.error(`No listener available for plugin ${this.plugin.name}`);
+        }
+    }
+
+    async handleCommandResult(result, message) {
+        if (result === undefined || result === null) return;
+
+        if (typeof result === "string" || typeof result === "number") {
+            await this.sendMessage(message.chat.id, String(result));
+            return;
+        }
+
+        if (typeof result === "object" && result.type) {
+            await this.handleTypedResult(result, message);
+        }
+    }
+
+    async handleEventResult(result, message, eventName) {
+        if (result === undefined || result === null) return;
+
+        try {
+            this.log.debug(`Auto-handling result for event ${eventName}, result type: ${typeof result}`);
+
+            if (typeof result === "string" || typeof result === "number") {
+                await this.sendMessage(message.chat.id, String(result));
+                return;
+            }
+
+            if (typeof result === "object" && result.type) {
+                await this.handleTypedResult(result, message);
+                return;
+            }
+
+            // If result is an object without type, try to send as string
+            if (typeof result === "object") {
+                await this.sendMessage(message.chat.id, JSON.stringify(result, null, 2));
+                return;
+            }
+
+        } catch (error) {
+            this.log.error(`Error auto-handling result for event ${eventName}:`, error);
+        }
+    }
+
+    async handleTypedResult(result, message) {
+        const { type, options = {} } = result;
+        const chatId = message.chat.id;
+
+        try {
+            switch (type) {
+                case "text":
+                    return await this.sendMessage(chatId, result.text, options);
+                case "audio":
+                    return await this.sendAudio(chatId, result.audio, options);
+                case "document":
+                    return await this.sendDocument(chatId, result.document, options);
+                case "photo":
+                    return await this.sendPhoto(chatId, result.photo, options);
+                case "sticker":
+                    return await this.sendSticker(chatId, result.sticker, options);
+                case "video":
+                    return await this.sendVideo(chatId, result.video, options);
+                case "voice":
+                    return await this.sendVoice(chatId, result.voice, options);
+                case "status":
+                case "chatAction":
+                    return await this.sendChatAction(chatId, result.status || result.action, options);
+                default:
+                    throw new Error(`Unrecognized reply type: ${type}`);
+            }
+        } catch (error) {
+            this.log.error(`Error handling typed result:`, error);
+            throw error;
+        }
+    }
+
+    // Plugin lifecycle methods
+    async start() {
+        this._isActive = true;
+        this.log.info(`Plugin ${this.plugin.name} started`);
+    }
+
+    async stop() {
+        this._isActive = false;
+
+        // Remove all event listeners
+        for (const [eventName, handler] of this._handlers) {
+            if (this.listener) {
+                this.listener.removeListener(eventName, handler);
+            }
+        }
+
+        this._handlers.clear();
+        this._commandRateLimit.clear();
+
+        this.log.info(`Plugin ${this.plugin.name} stopped`);
+    }
+
+    // Static properties and methods
     static get VISIBILITY() {
         return {
-            VISIBLE: 0,
-            HIDDEN: 1
+            ROOT: 0x00,
+            ADMIN: 0x01,
+            USER: 0x02
         };
     }
 
-    // TODO: tentukan tipe dan kegunaannya
     static get TYPE() {
         return {
             NORMAL: 0x01,
             INLINE: 0x02,
-            PROXY: 0x03,
-            SPECIAL: 0x04
-        };
-    }
-
-    // TODO: apakah level perlu?
-    static get LEVEL() {
-        return {
-            ROOT: 0x00,
-            ADMIN: 0x01,
-            USER: 0x02,
+            PROXY: 0x04,
+            SPECIAL: 0x08
         };
     }
 
     static get plugin() {
         return {
-            name: 'Plugin',
-            description: '',
-            help: 'Don\'t ask for help',
-            visibility: Plugin.VISIBILITY.VISIBLE,
-            type: Plugin.TYPE.SPECIAL
-        }
+            name: 'BasePlugin',
+            description: 'This is the base plugin',
+            help: '/help - Show help',
+            visibility: Plugin.VISIBILITY.HIDDEN,
+            version: '1.0.0',
+            author: 'TeleNode',
+        };
     }
 
     /**
@@ -221,22 +445,10 @@ export default class Plugin {
             chat_member: 'onChatMember',
             my_chat_member: 'onMyChatMember',
             chat_join_request: 'onChatJoinRequest',
-        }
+        };
     }
 
     get plugin() {
         return this.constructor.plugin;
-    }
-
-
-    stop() {
-        const eventNames = Object.keys(this._handlers);
-        if (this.listener) {
-            for (const eventName of eventNames) {
-                const handler = this._handlers[eventName];
-                this.listener.removeListener(eventName, handler);
-            }
-            this.listener.removeListener("_command", this.shortcutHandler);
-        }
     }
 }

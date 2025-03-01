@@ -21,7 +21,7 @@ async function preparingDatabase() {
     const Plugin = new pluginModule.default();
     const User = new userModule.default();
     console.log('Preparing database...');
-    // check tables plugins exists
+    // check table plugins exists
     await Plugin.rawQuery('SHOW TABLES LIKE "plugins"').then(async (result) => {
         if (result.length === 0) {
             await Plugin.rawQuery('CREATE TABLE IF NOT EXISTS plugins (' +
@@ -40,11 +40,11 @@ async function preparingDatabase() {
         }
     });
 
-    // check tables users exists
+    // check table users exists
     await User.rawQuery('SHOW TABLES LIKE "users"').then(async (result) => {
         if (result.length === 0) {
             await User.rawQuery('CREATE TABLE IF NOT EXISTS users (' +
-                'id INT PRIMARY KEY,' +
+                'id BIGINT PRIMARY KEY,' +
                 'username VARCHAR(255),' +
                 'first_name VARCHAR(255),' +
                 'last_name VARCHAR(255),' +
@@ -57,7 +57,25 @@ async function preparingDatabase() {
         }
     });
 
-    // check tables authorizations exists
+    // check table chats exists
+    await User.rawQuery('SHOW TABLES LIKE "chats"').then(async (result) => {
+        if (result.length === 0) {
+            await User.rawQuery('CREATE TABLE IF NOT EXISTS chats (' +
+                'id BIGINT PRIMARY KEY,' +
+                'type ENUM("private", "group", "supergroup", "channel"),' +
+                'title VARCHAR(255),' +
+                'username VARCHAR(255),' +
+                'first_name VARCHAR(255),' +
+                'last_name VARCHAR(255),' +
+                'is_blocked BOOLEAN DEFAULT 0,' +
+                'updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,' +
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)').then(() => {
+                console.log('Table chats created')
+            });
+        }
+    });
+
+    // check table authorizations exists
     await User.rawQuery('SHOW TABLES LIKE "authorizations"').then(async (result) => {
         if (result.length === 0) {
             // use user_id and chat_id as primary key

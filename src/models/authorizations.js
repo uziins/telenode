@@ -18,8 +18,12 @@ export default class Authorizations extends Model {
         if (role) {
             await this.where({user_id, chat_id}).update({role: "admin"});
         } else {
-            await this.insert({user_id, chat_id, role: "admin"});
+            await this.insertIgnore({user_id, chat_id, role: "admin"});
         }
         return true;
+    }
+
+    async removeAdmin(user_id, chat_id) {
+        return await this.where({user_id, chat_id}).delete();
     }
 }
