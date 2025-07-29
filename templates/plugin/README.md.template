@@ -6,7 +6,7 @@
 
 1. Navigate to the plugin directory:
 ```bash
-cd plugins/{{PLUGIN_NAME}}
+cd plugins/{{IDENTIFIER}}
 ```
 
 2. Install dependencies (if any):
@@ -34,7 +34,7 @@ Add any configuration options to your TeleNode config file:
 ```json
 {
   "plugins": {
-    "{{PLUGIN_NAME}}": {
+    "{{IDENTIFIER}}": {
       "enabled": true,
       "option1": "value1"
     }

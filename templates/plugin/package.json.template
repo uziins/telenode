@@ -1,5 +1,5 @@
 {
-  "name": "telenode-plugin-{{PLUGIN_NAME}}",
+  "name": "{{IDENTIFIER}}",
   "version": "1.0.0",
   "description": "{{DESCRIPTION}}",
   "main": "index.js",
@@ -12,9 +12,15 @@
   "engines": {
     "node": ">=16.0.0"
   },
+  "plugin": {
+    "displayName": "{{CLASS_NAME}}",
+    "help": "{{HELP}}",
+    "visibility": "{{VISIBILITY}}",
+    "type": "{{TYPE}}",
+    "category": "{{CATEGORY}}"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-repo/telenode-plugin-{{PLUGIN_NAME}}.git"
+    "url": "git+https://github.com/your-repo/{{IDENTIFIER}}.git"
   }
 }
-

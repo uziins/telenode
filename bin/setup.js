@@ -3,20 +3,20 @@ import inquirer from "inquirer";
 
 let Config;
 if (fs.existsSync('.env')) {
-    const module = await import ('./config.js');
+    const module = await import ('../src/config.js');
     Config = module.default;
 } else {
     // copy .env.example to .env, delete all comments and blank lines
     const envExample = fs.readFileSync('.env.example', 'utf8');
     const env = envExample.split('\n').filter(line => line.trim() !== '' && line[0] !== '#').join('\n');
     fs.writeFileSync('.env', env);
-    const module = await import ('./config.js');
+    const module = await import ('../src/config.js');
     Config = module.default;
 }
 
 async function preparingDatabase() {
-    const pluginModule = await import ("./models/plugins.js");
-    const userModule = await import ("./models/users.js");
+    const pluginModule = await import ("../src/models/plugins.js");
+    const userModule = await import ("../src/models/users.js");
 
     const Plugin = new pluginModule.default();
     const User = new userModule.default();
@@ -26,7 +26,8 @@ async function preparingDatabase() {
         if (result.length === 0) {
             await Plugin.rawQuery('CREATE TABLE IF NOT EXISTS plugins (' +
                 'id INT AUTO_INCREMENT PRIMARY KEY,' +
-                'plugin_name VARCHAR(255) NOT NULL,' +
+                'identifier VARCHAR(255) NOT NULL UNIQUE,' +
+                'version VARCHAR(50) NOT NULL DEFAULT "1.0.0",' +
                 'name VARCHAR(255),' +
                 'description TEXT, ' +
                 'help TEXT,' +

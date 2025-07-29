@@ -62,5 +62,7 @@ export default {
     cache: {
         ttl: parseInt(process.env.CACHE_TTL) || 300, // 5 minutes
         maxSize: parseInt(process.env.CACHE_MAX_SIZE) || 1000,
-    }
+    },
+    // Marketplace Configuration
+    MARKETPLACE_URL: process.env.MARKETPLACE_URL || 'http://localhost:3000/api',
 }

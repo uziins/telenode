@@ -1,5 +1,3 @@
-// credit: https://github.com/Telegram-Bot-Node/Nikoro
-
 import Logger from "./logger.js";
 
 /**
@@ -61,11 +59,9 @@ export default class Plugin {
         this._rateLimitWindow = 60000; // 1 minute
         this._maxCommandsPerWindow = 30;
 
-        this.log = Logger('', this.plugin.name);
-        this.log.info(`Plugin ${this.plugin.name} initializing...`);
-
-        // Validate plugin configuration
-        this.validatePlugin();
+        // Note: Plugin name will be set by PluginManager when the plugin is loaded
+        this.log = Logger('', 'Plugin');
+        this.log.info(`Plugin initializing...`);
 
         // Setup event handlers
         this.setupEventHandlers();
@@ -73,29 +69,7 @@ export default class Plugin {
         // Setup command shortcuts
         this.setupCommandShortcuts();
 
-        this.log.info(`Plugin ${this.plugin.name} loaded successfully`);
-    }
-
-    validatePlugin() {
-        const plugin = this.plugin;
-
-        if (!plugin.name || typeof plugin.name !== 'string') {
-            throw new Error('Plugin must have a valid name');
-        }
-
-        if (!plugin.description || typeof plugin.description !== 'string') {
-            throw new Error('Plugin must have a valid description');
-        }
-
-        // Visibility validation - support both old and new system
-        const validVisibilities = [
-            Plugin.VISIBILITY.VISIBLE, Plugin.VISIBILITY.HIDDEN, // Old system
-            Plugin.VISIBILITY.USER, Plugin.VISIBILITY.ADMIN, Plugin.VISIBILITY.ROOT // New system
-        ];
-
-        if (plugin.visibility === undefined || !validVisibilities.includes(plugin.visibility)) {
-            throw new Error('Plugin must have a valid visibility setting (ROOT, ADMIN, or USER)');
-        }
+        this.log.info(`Plugin loaded successfully`);
     }
 
     setupEventHandlers() {
@@ -173,6 +147,20 @@ export default class Plugin {
         });
     }
 
+    /**
+     * Proxy method for PROXY type plugins
+     * This method is called before normal event processing
+     * Override this method in proxy plugins to implement middleware functionality
+     * @param {string} eventName - The event name being processed
+     * @param {Object} eventData - The event data (message, callback_query, etc.)
+     * @returns {Object|null} Modified event data or null to stop processing
+     */
+    async proxy(eventName, eventData) {
+        // Default implementation does nothing
+        // Proxy plugins should override this method
+        return eventData;
+    }
+
     checkRateLimit(message) {
         if (!message?.from?.id) return true;
 
@@ -199,14 +187,14 @@ export default class Plugin {
 
     setupCommandShortcuts() {
         if (!this.commands) {
-            this.log.debug(`Plugin ${this.plugin.name} has no commands, skipping command shortcuts setup`);
+            this.log.debug(`Plugin has no commands, skipping command shortcuts setup`);
             return;
         }
 
-        this.log.info(`Setting up command shortcuts for plugin ${this.plugin.name}, commands: [${Object.keys(this.commands).join(', ')}]`);
+        this.log.info(`Setting up command shortcuts, commands: [${Object.keys(this.commands).join(', ')}]`);
 
         const shortcutHandler = async ({message, command, args}) => {
-            this.log.info(`🎯 SHORTCUT HANDLER TRIGGERED: Plugin "${this.plugin.name}" received command "${command}" from user ${message.from?.id}`);
+            this.log.info(`🎯 SHORTCUT HANDLER TRIGGERED: Plugin received command "${command}" from user ${message.from?.id}`);
 
             if (!this._isActive || !this.commands) return;
 
@@ -224,11 +212,11 @@ export default class Plugin {
                     .find(key => key.toLowerCase() === command.toLowerCase());
 
                 if (!commandKey) {
-                    this.log.debug(`Command "${command}" not found in plugin ${this.plugin.name}`);
+                    this.log.debug(`Command "${command}" not found in plugin`);
                     return;
                 }
 
-                this.log.info(`Executing command "${commandKey}" in plugin ${this.plugin.name}`);
+                this.log.info(`Executing command "${commandKey}" in plugin`);
 
                 const commandHandler = this.commands[commandKey];
 
@@ -261,11 +249,11 @@ export default class Plugin {
         };
 
         if (this.listener) {
-            this.log.info(`Registering _command event listener for plugin ${this.plugin.name}`);
+            this.log.info(`Registering _command event listener for plugin`);
             this.listener.on("_command", shortcutHandler);
             this._handlers.set("_command_shortcut", shortcutHandler);
         } else {
-            this.log.error(`No listener available for plugin ${this.plugin.name}`);
+            this.log.error(`No listener available for plugin`);
         }
     }
 
@@ -274,10 +262,7 @@ export default class Plugin {
 
         if (typeof result === "string" || typeof result === "number") {
             await this.sendMessage(message.chat.id, String(result));
-            return;
-        }
-
-        if (typeof result === "object" && result.type) {
+        } else if (typeof result === "object" && result.type) {
             await this.handleTypedResult(result, message);
         }
     }
@@ -290,18 +275,11 @@ export default class Plugin {
 
             if (typeof result === "string" || typeof result === "number") {
                 await this.sendMessage(message.chat.id, String(result));
-                return;
-            }
-
-            if (typeof result === "object" && result.type) {
+            } else if (typeof result === "object" && result.type) {
                 await this.handleTypedResult(result, message);
-                return;
-            }
-
-            // If result is an object without type, try to send as string
-            if (typeof result === "object") {
+            } else if (typeof result === "object") {
+                // If result is an object without type, try to send as string
                 await this.sendMessage(message.chat.id, JSON.stringify(result, null, 2));
-                return;
             }
 
         } catch (error) {
@@ -344,7 +322,7 @@ export default class Plugin {
     // Plugin lifecycle methods
     async start() {
         this._isActive = true;
-        this.log.info(`Plugin ${this.plugin.name} started`);
+        this.log.info(`Plugin started`);
     }
 
     async stop() {
@@ -360,7 +338,7 @@ export default class Plugin {
         this._handlers.clear();
         this._commandRateLimit.clear();
 
-        this.log.info(`Plugin ${this.plugin.name} stopped`);
+        this.log.info(`Plugin stopped`);
     }
 
     // Static properties and methods
@@ -375,20 +353,7 @@ export default class Plugin {
     static get TYPE() {
         return {
             NORMAL: 0x01,
-            INLINE: 0x02,
-            PROXY: 0x04,
-            SPECIAL: 0x08
-        };
-    }
-
-    static get plugin() {
-        return {
-            name: 'BasePlugin',
-            description: 'This is the base plugin',
-            help: '/help - Show help',
-            visibility: Plugin.VISIBILITY.HIDDEN,
-            version: '1.0.0',
-            author: 'TeleNode',
+            PROXY: 0x02
         };
     }
 
@@ -446,9 +411,5 @@ export default class Plugin {
             my_chat_member: 'onMyChatMember',
             chat_join_request: 'onChatJoinRequest',
         };
-    }
-
-    get plugin() {
-        return this.constructor.plugin;
     }
 }

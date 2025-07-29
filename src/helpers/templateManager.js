@@ -46,14 +46,15 @@ export default class TemplateManager {
 
         // Prepare placeholders
         const placeholders = {
-            PLUGIN_NAME: sanitizedName,
+            IDENTIFIER: sanitizedName,
             CLASS_NAME: className,
             COMMAND_NAME: commandName,
             DESCRIPTION: options.description || `A TeleNode plugin for ${sanitizedName}`,
-            HELP: options.help || `Help text for ${sanitizedName} plugin`,
+            HELP: options.help || `/${commandName} - ${options.description || `Execute ${sanitizedName} command`}`,
             AUTHOR: options.author || 'TeleNode Developer',
             LICENSE: options.license || 'MIT',
             CATEGORY: options.category || 'general',
+            VISIBILITY: options.visibility || 'USER',
             USAGE: options.usage || 'Main plugin command',
             DEPENDENCIES: JSON.stringify(options.dependencies || {}, null, 2),
             DEPENDENCIES_LIST: this.generateDependenciesList(options.dependencies)

@@ -2,6 +2,7 @@ import Plugin from "./plugin.js";
 import PluginModel from "./models/plugins.js";
 import { performanceMonitor } from "./helpers/performance.js";
 import { globalCache } from "./helpers/cache.js";
+import Marketplace from "./helpers/marketplace.js";
 
 const PluginTbl = new PluginModel();
 
@@ -11,6 +12,7 @@ export default class MasterPlugin extends Plugin {
         this.auth = auth;
         this.pm = pm;
         this.bot = pm.bot;
+        this.marketplace = new Marketplace(pm.config);
     }
 
     get plugin() {
@@ -20,7 +22,8 @@ export default class MasterPlugin extends Plugin {
             help: "`/su` - Access system management panel\n" +
                 "`/status` - Get system status report\n" +
                 "`/plugins` - List all loaded plugins\n" +
-                "`/reload [plugin_name]` - Reload a specific plugin or all plugins\n" +
+                "`/marketplace` - Browse plugin marketplace\n" +
+                "`/reload [identifier]` - Reload a specific plugin or all plugins\n" +
                 "`/cache` - View cache statistics\n" +
                 "`/health` - Perform health check on the system",
             visibility: Plugin.VISIBILITY.ROOT,
@@ -35,6 +38,7 @@ export default class MasterPlugin extends Plugin {
             su: this.handleSystemMenu.bind(this),
             status: this.handleSystemStatus.bind(this),
             plugins: this.handlePluginList.bind(this),
+            marketplace: this.handleMarketplace.bind(this),
             reload: this.handlePluginReload.bind(this),
             cache: this.handleCacheStats.bind(this),
             health: this.handleHealthCheck.bind(this)
@@ -222,14 +226,30 @@ export default class MasterPlugin extends Plugin {
             const plugin = this.pm.plugins.get(pluginName);
             if (!plugin) continue;
 
-            const pluginInfo = plugin.constructor.plugin;
-            const pluginVisibility = pluginInfo.visibility;
+            // Use plugin info from database/cache instead of static getter
+            const pluginInfo = this.pm.getPluginInfo(pluginName);
+            if (!pluginInfo) continue;
+
+            // Map string visibility to numeric constants
+            let pluginVisibility;
+            switch (pluginInfo.visibility?.toUpperCase()) {
+                case 'ROOT':
+                    pluginVisibility = Plugin.VISIBILITY.ROOT;
+                    break;
+                case 'ADMIN':
+                    pluginVisibility = Plugin.VISIBILITY.ADMIN;
+                    break;
+                case 'USER':
+                default:
+                    pluginVisibility = Plugin.VISIBILITY.USER;
+                    break;
+            }
 
             // Check if user can access this plugin based on visibility level
             let canAccess = false;
 
             if (pluginVisibility === Plugin.VISIBILITY.USER) {
-                canAccess = true; // Everyone can access USER level plugins
+                canAccess = true;
             } else if (pluginVisibility === Plugin.VISIBILITY.ADMIN) {
                 canAccess = this.auth.isAdmin(userId) || this.auth.isRoot(userId);
             } else if (pluginVisibility === Plugin.VISIBILITY.ROOT) {
@@ -307,8 +327,7 @@ export default class MasterPlugin extends Plugin {
 
     async onCallbackQuery({message}) {
         if (!message.data) return;
-
-        const callbackData = message.data;
+        
         const userId = message.from.id;
         const chatId = message.message.chat.id;
 
@@ -347,6 +366,32 @@ export default class MasterPlugin extends Plugin {
                             response = `❌ Plugin "${pluginName}" not found`;
                         }
                         keyboard = await this.getPluginDetailKeyboard(pluginName);
+                    } else if (par1 === 'confirm_update') {
+                        const pluginName = par2;
+                        const marketplacePlugin = await this.getPluginDetailInMarketplace(pluginName);
+                        const detail = await PluginTbl.upsertPlugin(pluginName);
+
+                        let updateText = "reinstall";
+                        if (marketplacePlugin && marketplacePlugin.latest_version !== detail.version) {
+                            updateText = `update to version ${marketplacePlugin.latest_version}`;
+                        }
+
+                        response = `⚠️ Are you sure you want to ${updateText} plugin "${pluginName}"?\n\nThis action will temporarily stop the plugin and may affect its current state.`;
+                        keyboard = [
+                            [
+                                { text: "✅ Yes, Continue", callback_data: `plugin_management update ${pluginName}` },
+                                { text: "❌ Cancel", callback_data: `plugin_management detail ${pluginName}` }
+                            ]
+                        ];
+                    } else if (par1 === 'confirm_uninstall') {
+                        const pluginName = par2;
+                        response = `⚠️ Are you sure you want to uninstall plugin "${pluginName}"?\n\n🔴 This action cannot be undone and will permanently remove the plugin and all its data.`;
+                        keyboard = [
+                            [
+                                { text: "🗑️ Yes, Uninstall", callback_data: `plugin_management uninstall ${pluginName}` },
+                                { text: "❌ Cancel", callback_data: `plugin_management detail ${pluginName}` }
+                            ]
+                        ];
                     } else if (par1 === 'activate' || par1 === 'deactivate') {
                         const pluginName = par2;
                         const action = par1 === 'activate' ? 'activated' : 'deactivated';
@@ -359,6 +404,69 @@ export default class MasterPlugin extends Plugin {
                             response = `✅ Plugin "${pluginName}" ${action} successfully`;
                         } catch (error) {
                             response = `❌ Failed to ${action} plugin "${pluginName}": ${error.message}`;
+                        }
+                        keyboard = await this.getPluginKeyboard();
+                    } else if (par1 === 'update') {
+                        const pluginName = par2;
+                        response = "⏳ Updating plugin...";
+
+                        // Send immediate response
+                        await this.bot.editMessageText(response, {
+                            chat_id: chatId,
+                            message_id: message.message.message_id,
+                            parse_mode: "Markdown"
+                        });
+
+                        try {
+                            // First, try to get plugin details from marketplace
+                            const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginName);
+                            if (detailsResult.success) {
+                                // Uninstall current version first
+                                const uninstallResult = await this.marketplace.uninstallPlugin(pluginName);
+                                if (uninstallResult.success) {
+                                    // Install the latest version
+                                    const installResult = await this.marketplace.installPlugin(pluginName);
+                                    if (installResult.success) {
+                                        response = `✅ Plugin "${pluginName}" updated successfully!`;
+                                        if (installResult.needsReload) {
+                                            response += "\n\n⚠️ Please reload plugins to apply changes.";
+                                        }
+                                    } else {
+                                        response = `❌ Update failed during installation: ${installResult.error}`;
+                                    }
+                                } else {
+                                    response = `❌ Update failed during uninstall: ${uninstallResult.error}`;
+                                }
+                            } else {
+                                response = `❌ Plugin not found in marketplace: ${detailsResult.error}`;
+                            }
+                        } catch (error) {
+                            response = `❌ Update failed: ${error.message}`;
+                        }
+                        keyboard = await this.getPluginKeyboard();
+                    } else if (par1 === 'uninstall') {
+                        const pluginName = par2;
+                        response = "⏳ Uninstalling plugin...";
+
+                        // Send immediate response
+                        await this.bot.editMessageText(response, {
+                            chat_id: chatId,
+                            message_id: message.message.message_id,
+                            parse_mode: "Markdown"
+                        });
+
+                        try {
+                            const uninstallResult = await this.marketplace.uninstallPlugin(pluginName);
+                            if (uninstallResult.success) {
+                                response = `✅ Plugin "${pluginName}" uninstalled successfully!`;
+                                if (uninstallResult.needsReload) {
+                                    response += "\n\n⚠️ Please reload plugins to complete removal.";
+                                }
+                            } else {
+                                response = `❌ Uninstall failed: ${uninstallResult.error}`;
+                            }
+                        } catch (error) {
+                            response = `❌ Uninstall failed: ${error.message}`;
                         }
                         keyboard = await this.getPluginKeyboard();
                     } else {
@@ -391,6 +499,125 @@ export default class MasterPlugin extends Plugin {
                     keyboard = await this.getPluginKeyboard();
                     break;
 
+                case 'marketplace':
+                    if (par1 === 'detail') {
+                        const pluginCode = par2;
+                        const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginCode);
+                        if (detailsResult.success) {
+                            const plugin = detailsResult.data;
+                            response = `🔌 *${plugin.name}*\n\n` +
+                                     `📝 ${plugin.description}\n` +
+                                     `👤 Author: ${plugin.author}\n` +
+                                     `🏷️ Version: ${plugin.latest_version}\n` +
+                                     `📥 Downloads: ${plugin.total_downloads}`;
+                        } else {
+                            response = `❌ Plugin details not found: ${detailsResult.error}`;
+                        }
+                        keyboard = await this.getMarketplaceDetailKeyboard(pluginCode);
+                    } else if (par1 === 'confirm_install') {
+                        const pluginCode = par2;
+                        const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginCode);
+
+                        if (detailsResult.success) {
+                            const plugin = detailsResult.data;
+                            response = `⚠️ Are you sure you want to install plugin "${plugin.name}"?\n\n` +
+                                     `📝 Description: ${plugin.description}\n` +
+                                     `👤 Author: ${plugin.author}\n` +
+                                     `🏷️ Version: ${plugin.latest_version}`;
+                        } else {
+                            response = `⚠️ Are you sure you want to install this plugin?`;
+                        }
+
+                        keyboard = [
+                            [
+                                { text: "📥 Yes, Install", callback_data: `marketplace install ${pluginCode}` },
+                                { text: "❌ Cancel", callback_data: `marketplace detail ${pluginCode}` }
+                            ]
+                        ];
+                    } else if (par1 === 'confirm_reinstall') {
+                        const pluginCode = par2;
+                        const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginCode);
+
+                        if (detailsResult.success) {
+                            const plugin = detailsResult.data;
+                            response = `⚠️ Are you sure you want to reinstall plugin "${plugin.name}"?\n\n` +
+                                     `This will remove the current version and install the latest version.\n` +
+                                     `📝 Latest Version: ${plugin.latest_version}`;
+                        } else {
+                            response = `⚠️ Are you sure you want to reinstall this plugin?`;
+                        }
+
+                        keyboard = [
+                            [
+                                { text: "🔄 Yes, Reinstall", callback_data: `marketplace install ${pluginCode}` },
+                                { text: "❌ Cancel", callback_data: `marketplace detail ${pluginCode}` }
+                            ]
+                        ];
+                    } else if (par1 === 'confirm_uninstall_marketplace') {
+                        const pluginCode = par2;
+                        response = `⚠️ Are you sure you want to uninstall plugin "${pluginCode}"?\n\n🔴 This action cannot be undone and will permanently remove the plugin and all its data.`;
+                        keyboard = [
+                            [
+                                { text: "🗑️ Yes, Uninstall", callback_data: `marketplace uninstall ${pluginCode}` },
+                                { text: "❌ Cancel", callback_data: `marketplace detail ${pluginCode}` }
+                            ]
+                        ];
+                    } else if (par1 === 'page') {
+                        const page = parseInt(par2) || 1;
+                        const marketplaceResult = await this.marketplace.getMarketplacePlugins(page);
+
+                        if (marketplaceResult.total > 0) {
+                            response = `🛒 *Plugin Marketplace*\n📄 Page ${marketplaceResult.page} of ${marketplaceResult.totalPages}`;
+                        } else {
+                            response = "🛒 Plugin Marketplace";
+                        }
+                        keyboard = await this.getMarketplaceKeyboard(page);
+                    } else if (par1 === 'install') {
+                        const pluginCode = par2;
+                        response = "⏳ Installing plugin...";
+
+                        // Send immediate response
+                        await this.bot.editMessageText(response, {
+                            chat_id: chatId,
+                            message_id: message.message.message_id,
+                            parse_mode: "Markdown"
+                        });
+
+                        // Install plugin
+                        const installResult = await this.marketplace.installPlugin(pluginCode);
+                        if (installResult.success) {
+                            response = `✅ Plugin "${installResult.pluginName}" installed successfully!`;
+                            if (installResult.needsReload) {
+                                response += "\n\n⚠️ Please reload plugins to activate.";
+                            }
+                        } else {
+                            response = `❌ Installation failed: ${installResult.error}`;
+                        }
+                        keyboard = await this.getMarketplaceKeyboard();
+                    } else if (par1 === 'uninstall') {
+                        const pluginName = par2;
+                        const uninstallResult = await this.marketplace.uninstallPlugin(pluginName);
+                        if (uninstallResult.success) {
+                            response = `✅ Plugin "${pluginName}" uninstalled successfully!`;
+                            if (uninstallResult.needsReload) {
+                                response += "\n\n⚠️ Please reload plugins to complete removal.";
+                            }
+                        } else {
+                            response = `❌ Uninstall failed: ${uninstallResult.error}`;
+                        }
+                        keyboard = await this.getPluginKeyboard();
+                    } else {
+                        const marketplaceResult = await this.marketplace.getMarketplacePlugins(1);
+
+                        if (marketplaceResult.total > 0) {
+                            response = `🛒 *Plugin Marketplace*\n📄 Page ${marketplaceResult.page} of ${marketplaceResult.totalPages}`;
+                        } else {
+                            response = "🛒 Plugin Marketplace";
+                        }
+                        keyboard = await this.getMarketplaceKeyboard(1);
+                    }
+                    break;
+
                 default:
                     response = "❌ Unknown command";
                     keyboard = await this.getMainKeyboard();
@@ -418,7 +645,7 @@ export default class MasterPlugin extends Plugin {
         return [
             [
                 { text: "📊 System Status", callback_data: "system_status" },
-                { text: "🔌 Plugins", callback_data: "plugin_management" }
+                { text: "🔌 Plugin Management", callback_data: "plugin_management" }
             ],
             [
                 { text: "🗃 Cache", callback_data: "cache_management" },
@@ -438,12 +665,13 @@ export default class MasterPlugin extends Plugin {
                 if (!pl) break;
                 let status = pl.is_active ? '☑️' : '✖️';
                 let command = 'detail';
-                row.push({text: `${pl.name} ${status}`, callback_data: `plugin_management ${command} ${pl.plugin_name}`})
+                row.push({text: `${pl.name} ${status}`, callback_data: `plugin_management ${command} ${pl.identifier}`})
             }
             keyboard.push(row)
         }
         keyboard.push([
             { text: "🔄 Reload All", callback_data: "reload_all_plugins" },
+            { text: "➕ Add Plugin", callback_data: "marketplace" }
         ])
         keyboard.push([
             { text: "🔙 Back", callback_data: "main_menu" }
@@ -452,18 +680,36 @@ export default class MasterPlugin extends Plugin {
     }
 
     async getPluginDetailKeyboard(pluginName) {
-        const detail = await PluginTbl.getPlugin(pluginName)
+        const detail = await PluginTbl.upsertPlugin(pluginName);
+
         const actionButton = detail.is_active ?
             { text: "❌ Deactivate", callback_data: `plugin_management deactivate ${pluginName}` } :
             { text: "✅ Activate", callback_data: `plugin_management activate ${pluginName}` };
-        return [
-            [
-                actionButton,
-            ],
-            [
-                { text: "🔙 Back to Main", callback_data: "plugin_management" }
-            ]
-        ];
+
+        // Check if plugin is available in marketplace for updates
+        const marketplacePlugin = await this.getPluginDetailInMarketplace(pluginName);
+
+        let keyboard = [[actionButton]];
+
+        if (marketplacePlugin) {
+            let installText = `🔄 Reinstall`
+            if (marketplacePlugin.latest_version !== detail.version) {
+                installText = `🔄 Update to ${marketplacePlugin.latest_version}`;
+            }
+            keyboard.push([
+                { text: installText, callback_data: `plugin_management confirm_update ${pluginName}` }
+            ]);
+        }
+
+        keyboard.push([
+            { text: "🗑️ Uninstall", callback_data: `plugin_management confirm_uninstall ${pluginName}` }
+        ]);
+
+        keyboard.push([
+            { text: "🔙 Back to Plugins", callback_data: "plugin_management" }
+        ]);
+
+        return keyboard;
     }
 
     async getCacheKeyboard() {
@@ -483,5 +729,146 @@ export default class MasterPlugin extends Plugin {
                 { text: "🔙 Back to Main", callback_data: "main_menu" }
             ]
         ];
+    }
+
+    async handleMarketplace({message}) {
+        if (!this.auth.isRoot(message.from.id)) {
+            this.log.warn(`Unauthorized access attempt by user ${message.from.id} to marketplace`);
+            return;
+        }
+
+        return {
+            type: "text",
+            text: "🛒 Plugin Marketplace",
+            options: {
+                reply_markup: {
+                    inline_keyboard: await this.getMarketplaceKeyboard()
+                }
+            }
+        };
+    }
+
+    async getMarketplaceKeyboard(page = 1) {
+        try {
+            const marketplaceResult = await this.marketplace.getMarketplacePlugins(page);
+            const availablePlugins = marketplaceResult.success ? marketplaceResult.data.plugins : [];
+            const pagination = marketplaceResult.success ? marketplaceResult.data.total : 0;
+
+            const btnPerRow = 2;
+            let keyboard = [];
+
+            if (availablePlugins.length > 0) {
+                for (let i = 0; i < availablePlugins.length; i += btnPerRow) {
+                    let row = [];
+                    for (let j = 0; j < btnPerRow && i + j < availablePlugins.length; j++) {
+                        let pl = availablePlugins[i + j];
+                        row.push({
+                            text: `${pl.name} - ${pl.author}`,
+                            callback_data: `marketplace detail ${pl.code}`
+                        });
+                    }
+                    keyboard.push(row);
+                }
+
+                if (pagination && (marketplaceResult.data.prevPage || marketplaceResult.data.nextPage)) {
+                    let paginationRow = [];
+
+                    if (marketplaceResult.data.prevPage) {
+                        paginationRow.push({ text: "◀️ Prev", callback_data: `marketplace page ${page - 1}` });
+                    }
+
+                    if (marketplaceResult.data.nextPage) {
+                        paginationRow.push({ text: "Next ▶️", callback_data: `marketplace page ${page + 1}` });
+                    }
+
+                    keyboard.push(paginationRow);
+                }
+            } else {
+                keyboard.push([
+                    { text: "📭 No plugins available", callback_data: "marketplace" }
+                ]);
+            }
+
+            keyboard.push([
+                { text: "🔙 Back to Plugins", callback_data: "plugin_management" }
+            ]);
+
+            return keyboard;
+        } catch (error) {
+            this.log.error('Error loading marketplace keyboard:', error);
+            return [
+                [{ text: "❌ Error loading marketplace", callback_data: "marketplace" }],
+                [{ text: "🔙 Back to Plugins", callback_data: "plugin_management" }]
+            ];
+        }
+    }
+
+    async getMarketplaceDetailKeyboard(pluginId) {
+        try {
+            // Check if plugin is already installed
+            const installedPlugin = await PluginTbl.getPlugin(pluginId);
+
+            let actionButtons = [];
+
+            if (installedPlugin) {
+                // Plugin is already installed, check version
+                const marketplaceResult = await this.marketplace.getMarketplacePluginDetails(pluginId);
+                if (marketplaceResult.success) {
+                    const marketplacePlugin = marketplaceResult.data;
+                    const installedVersion = installedPlugin.version || '1.0.0';
+                    const marketplaceVersion = marketplacePlugin.version || '1.0.0';
+
+                    if (installedVersion !== marketplaceVersion) {
+                        // Different version - show Update with confirmation
+                        actionButtons.push({ text: "🔄 Update", callback_data: `marketplace confirm_reinstall ${pluginId}` });
+                      } else {
+                        // Same version - show Reinstall with confirmation
+                        actionButtons.push({ text: "🔄 Reinstall", callback_data: `marketplace confirm_reinstall ${pluginId}` });
+                      }
+                } else {
+                    // Cannot get marketplace details, default to reinstall with confirmation
+                    actionButtons.push({ text: "🔄 Reinstall", callback_data: `marketplace confirm_reinstall ${pluginId}` });
+                }
+
+                // Always show uninstall if plugin is already installed - with confirmation
+                actionButtons.push({ text: "🗑️ Uninstall", callback_data: `marketplace confirm_uninstall_marketplace ${pluginId}` });
+            } else {
+                // Plugin is not installed yet - show Install with confirmation
+                actionButtons.push({ text: "📥 Install", callback_data: `marketplace confirm_install ${pluginId}` });
+            }
+
+            return [
+                actionButtons,
+                [
+                    { text: "🔙 Back to Marketplace", callback_data: "marketplace" },
+                    { text: "🏠 Main Menu", callback_data: "main_menu" }
+                ]
+            ];
+        } catch (error) {
+            this.log.error('Error generating marketplace detail keyboard:', error);
+            // Fallback to default button if error occurs
+            return [
+                [
+                    { text: "📥 Install", callback_data: `marketplace confirm_install ${pluginId}` }
+                ],
+                [
+                    { text: "🔙 Back to Marketplace", callback_data: "marketplace" },
+                    { text: "🏠 Main Menu", callback_data: "main_menu" }
+                ]
+            ];
+        }
+    }
+
+    /**
+     * Get plugin details from the marketplace if available.
+     */
+    async getPluginDetailInMarketplace(pluginName) {
+        try {
+            const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginName);
+            return detailsResult.data;
+        } catch (error) {
+            this.log.debug(`Plugin ${pluginName} not found in marketplace:`, error);
+            return false;
+        }
     }
 }

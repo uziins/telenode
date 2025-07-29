@@ -1,5 +1,3 @@
-// credit: https://github.com/Telegram-Bot-Node/Nikoro
-
 import fs from "fs";
 import path from "path";
 import {EventEmitter} from "events";
@@ -49,16 +47,37 @@ export default class PluginManager {
             this.bot.on(eventName, async (message) => {
                 try {
                     // Process proxy plugins first
-                    const proxyPlugins = Array.from(this.plugins.values())
-                        .filter(plugin => (plugin.plugin.type & Plugin.TYPE.PROXY) === Plugin.TYPE.PROXY);
+                    const allPlugins = Array.from(this.plugins.values());
 
-                    await Promise.all(proxyPlugins.map(plugin =>
-                        this.safeExecute(() => plugin.proxy(eventName, message))
-                    ));
+                    const proxyPlugins = allPlugins.filter(plugin => {
+                        const pluginName = plugin._pluginName;
+                        const pluginInfo = this.getPluginInfo(pluginName);
 
-                    // Emit events with correct structure
-                    this.emit("message", message);
-                    this.emit(eventName, message);
+                        return pluginInfo && pluginInfo.type && (pluginInfo.type & Plugin.TYPE.PROXY) === Plugin.TYPE.PROXY;
+                    });
+
+                    // Execute proxy plugins sequentially and allow them to modify the message
+                    let processedMessage = message;
+                    for (const plugin of proxyPlugins) {
+                        try {
+                            const result = await this.safeExecute(() => plugin.proxy(eventName, processedMessage));
+                            // If proxy returns null, stop processing
+                            if (result === null) {
+                                return;
+                            }
+                            // If proxy returns modified data, use it
+                            if (result && typeof result === 'object') {
+                                processedMessage = result;
+                            }
+                        } catch (error) {
+                            this.log.error(`Error in proxy plugin ${plugin.constructor.name}:`, error);
+                            // Continue with other proxy plugins even if one fails
+                        }
+                    }
+
+                    // Emit events with processed message
+                    this.emit("message", processedMessage);
+                    this.emit(eventName, processedMessage);
                 } catch (error) {
                     this.log.error(`Error processing ${eventName} event:`, error);
                 }
@@ -126,7 +145,6 @@ export default class PluginManager {
                     errorCount++;
                     const pluginName = pluginDirs[index];
                     this.log.error(`Failed to load plugin ${pluginName}:`, result.reason);
-
                     // Clean up failed plugin from caches
                     this.loadedPlugins.delete(pluginName);
                     this.plugins.delete(pluginName);
@@ -134,6 +152,7 @@ export default class PluginManager {
                 }
             });
 
+            // Only keep summary info log
             this.log.info(`Plugin loading completed: ${successCount} successful, ${errorCount} failed`);
 
             // Clean up plugins not in directory
@@ -162,7 +181,19 @@ export default class PluginManager {
         try {
             // Check if plugin is already loaded
             if (this.loadedPlugins.has(pluginName)) {
-                this.log.debug(`Plugin ${pluginName} already loaded, skipping`);
+                // Removed debug log for already loaded plugin
+                return;
+            }
+
+            // Read plugin metadata from package.json
+            const pluginDetail = await this.readPluginMetadata(pluginName);
+            if (!pluginDetail) {
+                throw new Error(`Plugin ${pluginName} does not have valid package.json metadata`);
+            }
+            // Check plugin status in database
+            const dbPlugin = await PluginTbl.upsertPlugin(pluginName, pluginDetail);
+            if (!dbPlugin || !dbPlugin.is_active) {
+                // Removed debug log for inactive plugin
                 return;
             }
 
@@ -177,18 +208,6 @@ export default class PluginManager {
                 throw new Error(`Plugin ${pluginName} does not have a default export`);
             }
 
-            const pluginDetail = ThePluginModule.default.plugin;
-            if (!pluginDetail) {
-                throw new Error(`Plugin ${pluginName} does not have plugin metadata`);
-            }
-
-            // Check plugin status in database
-            const dbPlugin = await PluginTbl.getPlugin(pluginName, pluginDetail);
-            if (!dbPlugin || !dbPlugin.is_active) {
-                this.log.debug(`Plugin ${pluginName} is not active, skipping`);
-                return;
-            }
-
             // Create plugin instance
             const pluginInstance = new ThePluginModule.default(this.emitter, this.bot, this.auth);
 
@@ -199,13 +218,16 @@ export default class PluginManager {
             // Bind bot methods to plugin
             this.bindBotMethods(pluginInstance);
 
+            // Store the plugin name in the instance for easy access
+            pluginInstance._pluginName = pluginName;
+
             // Store plugin
             this.plugins.set(pluginName, pluginInstance);
             this.loadedPlugins.add(pluginName);
             this.pluginMetaCache.set(pluginName, pluginDetail);
 
             // Update plugin status in database
-            await PluginTbl.where("plugin_name", pluginName).update({is_active: true});
+            await PluginTbl.where("identifier", pluginName).update({is_active: true});
 
             this.log.info(`Plugin ${pluginName} loaded successfully`);
 
@@ -229,6 +251,10 @@ export default class PluginManager {
     }
 
     async cleanupRemovedPlugins(currentPluginDirs) {
+        if (!currentPluginDirs || currentPluginDirs.length === 0) {
+            this.log.debug('No current plugin directories provided for cleanup');
+            return;
+        }
         try {
             await PluginTbl.deletePlugin(currentPluginDirs);
             this.log.debug('Cleaned up removed plugins from database');
@@ -240,7 +266,7 @@ export default class PluginManager {
     async unloadPlugin(pluginName) {
         try {
             // Update database
-            await PluginTbl.where("plugin_name", pluginName).update({is_active: false});
+            await PluginTbl.where("identifier", pluginName).update({is_active: false});
 
             // Stop and remove plugin
             const plugin = this.plugins.get(pluginName);
@@ -336,22 +362,15 @@ export default class PluginManager {
         this.log.debug('Pre-populating plugin metadata cache...');
 
         for (const pluginDir of pluginDirs) {
-            const pluginPath = path.join(process.cwd(), 'plugins', pluginDir, 'index.js');
-
-            if (await this.isValidPluginPath(pluginPath)) {
-                try {
-                    // Load plugin metadata without instantiating
-                    const cacheBuster = `?v=${Date.now()}`;
-                    const ThePluginModule = await import(pluginPath + cacheBuster);
-
-                    if (ThePluginModule.default && ThePluginModule.default.plugin) {
-                        const pluginDetail = ThePluginModule.default.plugin;
-                        this.pluginMetaCache.set(pluginDir, pluginDetail);
-                        this.log.debug(`Cached metadata for plugin: ${pluginDir}`);
-                    }
-                } catch (error) {
-                    this.log.warn(`Failed to cache metadata for plugin ${pluginDir}:`, error.message);
+            try {
+                // Read metadata from package.json instead of static getter
+                const pluginDetail = await this.readPluginMetadata(pluginDir);
+                if (pluginDetail) {
+                    this.pluginMetaCache.set(pluginDir, pluginDetail);
+                    this.log.debug(`Cached metadata for plugin: ${pluginDir}`);
                 }
+            } catch (error) {
+                this.log.warn(`Failed to cache metadata for plugin ${pluginDir}:`, error.message);
             }
         }
     }
@@ -377,7 +396,7 @@ export default class PluginManager {
     async activatePlugin(pluginName) {
         try {
             // Set plugin as active in database
-            await PluginTbl.where("plugin_name", pluginName).update({is_active: true});
+            await PluginTbl.where("identifier", pluginName).update({is_active: true});
 
             // Load the plugin if it exists
             const pluginPath = path.join(process.cwd(), 'plugins', pluginName, 'index.js');
@@ -399,7 +418,7 @@ export default class PluginManager {
     async deactivatePlugin(pluginName) {
         try {
             // Set plugin as inactive in database
-            await PluginTbl.where("plugin_name", pluginName).update({is_active: false});
+            await PluginTbl.where("identifier", pluginName).update({is_active: false});
 
             // Stop and remove plugin if it's loaded
             const plugin = this.plugins.get(pluginName);
@@ -421,7 +440,7 @@ export default class PluginManager {
 
     async getPluginStatus(pluginName) {
         try {
-            const dbPlugin = await PluginTbl.where("plugin_name", pluginName).first();
+            const dbPlugin = await PluginTbl.where("identifier", pluginName).first();
             return {
                 exists: !!dbPlugin,
                 is_active: dbPlugin ? dbPlugin.is_active : false,
@@ -480,6 +499,41 @@ export default class PluginManager {
         } catch (error) {
             this.log.error(`Error removing plugin ${pluginName}:`, error);
             throw error;
+        }
+    }
+
+    async readPluginMetadata(pluginName) {
+        try {
+            const packageJsonPath = path.join(process.cwd(), 'plugins', pluginName, 'package.json');
+            const packageData = JSON.parse(await fs.promises.readFile(packageJsonPath, 'utf8'));
+
+            const pluginType = packageData.plugin?.type;
+            let typeValue = Plugin.TYPE.NORMAL;
+
+            // Convert string type to numeric value
+            if (pluginType === "PROXY") {
+                typeValue = Plugin.TYPE.PROXY;
+            } else if (pluginType === "INLINE") {
+                typeValue = Plugin.TYPE.INLINE;
+            } else if (pluginType === "SPECIAL") {
+                typeValue = Plugin.TYPE.SPECIAL;
+            }
+
+            const metadata = {
+                name: packageData.plugin?.displayName || packageData.name,
+                description: packageData.description,
+                help: packageData.plugin?.help || "No help available",
+                visibility: packageData.plugin?.visibility || "USER",
+                type: typeValue,
+                version: packageData.version,
+                author: packageData.author
+            };
+
+            this.log.debug(`Plugin ${pluginName} metadata:`, metadata);
+            return metadata;
+        } catch (error) {
+            this.log.error(`Failed to read plugin metadata for ${pluginName}:`, error);
+            return null;
         }
     }
 }
