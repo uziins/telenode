@@ -50,6 +50,7 @@ import Logger from "./logger.js";
 export default class Plugin {
     constructor(listener, bot, auth) {
         this.listener = listener;
+        this.bot = bot;
         this.auth = auth;
         this._handlers = new Map(); // Use Map for better performance
         this._isActive = true;
@@ -411,5 +412,62 @@ export default class Plugin {
             my_chat_member: 'onMyChatMember',
             chat_join_request: 'onChatJoinRequest',
         };
+    }
+
+    // Bot API methods - these should be injected by PluginManager
+    async sendMessage(chatId, text, options = {}) {
+        if (this.bot && this.bot.sendMessage) {
+            return await this.bot.sendMessage(chatId, text, options);
+        }
+        throw new Error('Bot sendMessage method not available');
+    }
+
+    async sendPhoto(chatId, photo, options = {}) {
+        if (this.bot && this.bot.sendPhoto) {
+            return await this.bot.sendPhoto(chatId, photo, options);
+        }
+        throw new Error('Bot sendPhoto method not available');
+    }
+
+    async sendDocument(chatId, document, options = {}) {
+        if (this.bot && this.bot.sendDocument) {
+            return await this.bot.sendDocument(chatId, document, options);
+        }
+        throw new Error('Bot sendDocument method not available');
+    }
+
+    async sendAudio(chatId, audio, options = {}) {
+        if (this.bot && this.bot.sendAudio) {
+            return await this.bot.sendAudio(chatId, audio, options);
+        }
+        throw new Error('Bot sendAudio method not available');
+    }
+
+    async sendVideo(chatId, video, options = {}) {
+        if (this.bot && this.bot.sendVideo) {
+            return await this.bot.sendVideo(chatId, video, options);
+        }
+        throw new Error('Bot sendVideo method not available');
+    }
+
+    async sendVoice(chatId, voice, options = {}) {
+        if (this.bot && this.bot.sendVoice) {
+            return await this.bot.sendVoice(chatId, voice, options);
+        }
+        throw new Error('Bot sendVoice method not available');
+    }
+
+    async sendSticker(chatId, sticker, options = {}) {
+        if (this.bot && this.bot.sendSticker) {
+            return await this.bot.sendSticker(chatId, sticker, options);
+        }
+        throw new Error('Bot sendSticker method not available');
+    }
+
+    async sendChatAction(chatId, action, options = {}) {
+        if (this.bot && this.bot.sendChatAction) {
+            return await this.bot.sendChatAction(chatId, action, options);
+        }
+        throw new Error('Bot sendChatAction method not available');
     }
 }

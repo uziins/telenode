@@ -226,6 +226,9 @@ export default class PluginManager {
             this.loadedPlugins.add(pluginName);
             this.pluginMetaCache.set(pluginName, pluginDetail);
 
+            // Call start() method to initialize the plugin
+            await this.safeExecute(() => pluginInstance.start());
+
             // Update plugin status in database
             await PluginTbl.where("identifier", pluginName).update({is_active: true});
 

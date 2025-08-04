@@ -26,8 +26,9 @@ pids/
 coverage/
 *.lcov
 
-# nyc test coverage
+# Test coverage
 .nyc_output
+jest-coverage/
 
 # Grunt intermediate storage
 .grunt

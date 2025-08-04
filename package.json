@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js --inspect",
-    "health": "curl -f http://localhost:${APP_PORT:-8001}/health || exit 1",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage",
     "logs": "tail -f logs/*.log",
     "clean": "rm -rf logs/*.log",
     "setup": "node bin/setup.js",
@@ -33,7 +35,10 @@
   },
   "devDependencies": {
     "dotenv": "^16.3.1",
-    "nodemon": "^3.0.1"
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1",
+    "sinon": "^21.0.0",
+    "supertest": "^7.1.4"
   },
   "optionalDependencies": {
     "pm2": "^5.3.0"
