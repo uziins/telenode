@@ -5,12 +5,22 @@ export default class MarketplaceHandler {
         this.pm = masterPlugin.pm;
         this.log = masterPlugin.log;
         this.marketplace = masterPlugin.marketplace;
+        this.config = masterPlugin.pm.config;
     }
 
     async handleMarketplace({message}) {
         if (!this.auth.isRoot(message.from.id)) {
             this.log.warn(`Unauthorized access attempt by user ${message.from.id} to marketplace`);
             return;
+        }
+
+        // Check if marketplace is enabled
+        if (!this.config.USE_PLUGIN_MARKETPLACE) {
+            return {
+                type: "text",
+                text: "❌ Plugin marketplace is disabled in system configuration.",
+                options: { parse_mode: "Markdown" }
+            };
         }
 
         const marketplaceResult = await this.marketplace.getMarketplacePlugins(1);
@@ -35,6 +45,14 @@ export default class MarketplaceHandler {
     }
 
     async handleCallbackQuery(cmd, par1, par2, userId, chatId, message) {
+        // Check if marketplace is enabled
+        if (!this.config.USE_PLUGIN_MARKETPLACE) {
+            return {
+                response: "❌ Plugin marketplace is disabled in system configuration.",
+                keyboard: await this.masterPlugin.keyboardManager.getMainKeyboard()
+            };
+        }
+
         let response = "🛒 Plugin Marketplace";
         let keyboard;
 

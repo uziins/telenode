@@ -33,7 +33,7 @@ export default class MasterPlugin extends Plugin {
             help: "`/su` - Access system management panel\n" +
                 "`/status` - Get system status report\n" +
                 "`/plugins` - List all loaded plugins\n" +
-                "`/marketplace` - Browse plugin marketplace\n" +
+                (this.pm.config.USE_PLUGIN_MARKETPLACE ? "`/marketplace` - Browse plugin marketplace\n" : "") +
                 "`/reload [identifier]` - Reload a specific plugin or all plugins\n" +
                 "`/cache` - View cache statistics\n" +
                 "`/health` - Perform health check on the system",
@@ -51,16 +51,22 @@ export default class MasterPlugin extends Plugin {
             return {};
         }
 
-        return {
+        const commands = {
             help: this.helpHandler.handleGlobalHelp.bind(this.helpHandler),
             su: this.systemHandler.handleSystemMenu.bind(this.systemHandler),
             status: this.systemHandler.handleSystemStatus.bind(this.systemHandler),
             plugins: this.pluginHandler.handlePluginList.bind(this.pluginHandler),
-            marketplace: this.marketplaceHandler.handleMarketplace.bind(this.marketplaceHandler),
             reload: this.pluginHandler.handlePluginReload.bind(this.pluginHandler),
             cache: this.cacheHandler.handleCacheStats.bind(this.cacheHandler),
             health: this.healthHandler.handleHealthCheck.bind(this.healthHandler)
         };
+
+        // Only add marketplace command if marketplace is enabled
+        if (this.pm.config.USE_PLUGIN_MARKETPLACE) {
+            commands.marketplace = this.marketplaceHandler.handleMarketplace.bind(this.marketplaceHandler);
+        }
+
+        return commands;
     }
 
     async onCallbackQuery({message}) {
@@ -114,6 +120,14 @@ export default class MasterPlugin extends Plugin {
                     break;
 
                 case 'marketplace':
+                    // Check if marketplace is enabled
+                    if (!this.pm.config.USE_PLUGIN_MARKETPLACE) {
+                        await this.bot.answerCallbackQuery(message.id, {
+                            text: "❌ Plugin marketplace is disabled",
+                            show_alert: true
+                        });
+                        return;
+                    }
                     const marketResult = await this.marketplaceHandler.handleCallbackQuery(cmd, par1, par2, userId, chatId, message);
                     if (marketResult) {
                         response = marketResult.response;

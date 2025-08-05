@@ -6,6 +6,7 @@ export default class KeyboardManager {
     constructor(masterPlugin) {
         this.masterPlugin = masterPlugin;
         this.marketplace = masterPlugin.marketplace;
+        this.config = masterPlugin.pm.config;
     }
 
     async getMainKeyboard() {
@@ -47,11 +48,18 @@ export default class KeyboardManager {
             keyboard.push(row);
         }
         
-        keyboard.push([
-            { text: "🔄 Reload All", callback_data: "reload_all_plugins" },
-            { text: "➕ Add Plugin", callback_data: "marketplace" }
-        ]);
-        
+        // Conditionally add marketplace button based on config
+        if (this.config.USE_PLUGIN_MARKETPLACE) {
+            keyboard.push([
+                { text: "🔄 Reload All", callback_data: "reload_all_plugins" },
+                { text: "➕ Add Plugin", callback_data: "marketplace" }
+            ]);
+        } else {
+            keyboard.push([
+                { text: "🔄 Reload All", callback_data: "reload_all_plugins" }
+            ]);
+        }
+
         keyboard.push([
             { text: "🔙 Back", callback_data: "main_menu" }
         ]);
@@ -66,24 +74,27 @@ export default class KeyboardManager {
             { text: "❌ Deactivate", callback_data: `plugin_management deactivate ${pluginName}` } :
             { text: "✅ Activate", callback_data: `plugin_management activate ${pluginName}` };
 
-        // Check if plugin is available in marketplace for updates
-        const marketplacePlugin = await this.getPluginDetailInMarketplace(pluginName);
-
         let keyboard = [[actionButton]];
 
-        if (marketplacePlugin) {
-            let installText = `🔄 Reinstall`;
-            if (marketplacePlugin.latest_version !== detail.version) {
-                installText = `🔄 Update to ${marketplacePlugin.latest_version}`;
+        // Only show marketplace-related buttons if marketplace is enabled
+        if (this.config.USE_PLUGIN_MARKETPLACE) {
+            // Check if plugin is available in marketplace for updates
+            const marketplacePlugin = await this.getPluginDetailInMarketplace(pluginName);
+
+            if (marketplacePlugin) {
+                let installText = `🔄 Reinstall`;
+                if (marketplacePlugin.latest_version !== detail.version) {
+                    installText = `🔄 Update to ${marketplacePlugin.latest_version}`;
+                }
+                keyboard.push([
+                    { text: installText, callback_data: `plugin_management confirm_update ${pluginName}` }
+                ]);
             }
+
             keyboard.push([
-                { text: installText, callback_data: `plugin_management confirm_update ${pluginName}` }
+                { text: "🗑️ Uninstall", callback_data: `plugin_management confirm_uninstall ${pluginName}` }
             ]);
         }
-
-        keyboard.push([
-            { text: "🗑️ Uninstall", callback_data: `plugin_management confirm_uninstall ${pluginName}` }
-        ]);
 
         keyboard.push([
             { text: "🔙 Back", callback_data: "plugin_management" }

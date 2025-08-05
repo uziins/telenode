@@ -1,5 +1,4 @@
 import PluginModel from "../../models/plugins.js";
-import { performanceMonitor } from "../../helpers/performance.js";
 
 const PluginTbl = new PluginModel();
 
@@ -10,6 +9,7 @@ export default class PluginHandler {
         this.pm = masterPlugin.pm;
         this.log = masterPlugin.log;
         this.marketplace = masterPlugin.marketplace;
+        this.config = masterPlugin.pm.config;
     }
 
     async handlePluginList({message}) {
@@ -91,6 +91,13 @@ export default class PluginHandler {
             }
             keyboard = await this.masterPlugin.keyboardManager.getPluginDetailKeyboard(pluginName);
         } else if (par1 === 'confirm_update') {
+            // Check if marketplace is enabled for update operations
+            if (!this.config.USE_PLUGIN_MARKETPLACE) {
+                response = "❌ Plugin marketplace is disabled. Update functionality is not available.";
+                keyboard = await this.masterPlugin.keyboardManager.getPluginDetailKeyboard(par2);
+                return { response, keyboard };
+            }
+
             const pluginName = par2;
             const marketplacePlugin = await this.getPluginDetailInMarketplace(pluginName);
             const detail = await PluginTbl.upsertPlugin(pluginName);
@@ -108,6 +115,13 @@ export default class PluginHandler {
                 ]
             ];
         } else if (par1 === 'confirm_uninstall') {
+            // Check if marketplace is enabled for uninstall operations
+            if (!this.config.USE_PLUGIN_MARKETPLACE) {
+                response = "❌ Plugin marketplace is disabled. Uninstall functionality is not available.";
+                keyboard = await this.masterPlugin.keyboardManager.getPluginDetailKeyboard(par2);
+                return { response, keyboard };
+            }
+
             const pluginName = par2;
             response = `⚠️ Are you sure you want to uninstall plugin "${pluginName}"?\n\n🔴 This action cannot be undone and will permanently remove the plugin and all its data.`;
             keyboard = [
@@ -142,6 +156,13 @@ export default class PluginHandler {
     }
 
     async handlePluginUpdate(pluginName, chatId, message) {
+        // Check if marketplace is enabled
+        if (!this.config.USE_PLUGIN_MARKETPLACE) {
+            const response = "❌ Plugin marketplace is disabled. Update functionality is not available.";
+            const keyboard = await this.masterPlugin.keyboardManager.getPluginKeyboard();
+            return { response, keyboard };
+        }
+
         let response = "⏳ Updating plugin...";
 
         // Send immediate response
@@ -183,6 +204,13 @@ export default class PluginHandler {
     }
 
     async handlePluginUninstall(pluginName, chatId, message) {
+        // Check if marketplace is enabled
+        if (!this.config.USE_PLUGIN_MARKETPLACE) {
+            const response = "❌ Plugin marketplace is disabled. Uninstall functionality is not available.";
+            const keyboard = await this.masterPlugin.keyboardManager.getPluginKeyboard();
+            return { response, keyboard };
+        }
+
         let response = "⏳ Uninstalling plugin...";
 
         // Send immediate response
@@ -211,6 +239,11 @@ export default class PluginHandler {
     }
 
     async getPluginDetailInMarketplace(pluginName) {
+        // Return null if marketplace is disabled
+        if (!this.config.USE_PLUGIN_MARKETPLACE) {
+            return null;
+        }
+
         const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginName);
         return detailsResult.success ? detailsResult.data : null;
     }

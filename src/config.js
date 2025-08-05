@@ -35,6 +35,7 @@ export default {
     LOG_LEVEL: process.env.LOG_LEVEL || 'info',
     UPDATE_MODE: process.env.UPDATE_MODE || 'polling',
     WEBHOOK_URL: process.env.WEBHOOK_URL || 'https://public-url-for-your-app.com',
+    USE_PLUGIN_MARKETPLACE: process.env.USE_PLUGIN_MARKETPLACE === 'True' || process.env.USE_PLUGIN_MARKETPLACE === 'true',
     server: {
         port: parseInt(process.env.APP_PORT) || 8001,
         host: process.env.APP_HOST || 'localhost',
@@ -64,5 +65,5 @@ export default {
         maxSize: parseInt(process.env.CACHE_MAX_SIZE) || 1000,
     },
     // Marketplace Configuration
-    MARKETPLACE_URL: process.env.MARKETPLACE_URL || 'http://localhost:3000/api',
+    MARKETPLACE_URL: 'http://localhost:3000/api',
 }
