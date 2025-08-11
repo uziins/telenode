@@ -43,7 +43,7 @@ export default class PluginHandler {
         };
     }
 
-    async handlePluginReload({message, args}) {
+    async handlePluginCommand({message, args}) {
         // check if user is root
         if (!this.auth.isRoot(message.from.id)) {
             this.log.warn(`Unauthorized access attempt by user ${message.from.id} to plugin reload`);
@@ -56,24 +56,88 @@ export default class PluginHandler {
             return;
         }
 
-        if (args.length === 0) {
-            // Reload all plugins
-            try {
-                await this.pm.reloadPlugins();
-                return "✅ All plugins reloaded successfully.";
-            } catch (error) {
-                return `❌ Failed to reload plugins: ${error.message}`;
-            }
-        } else {
-            // Reload specific plugin
-            const pluginName = args[0];
-            try {
-                await this.pm.unloadPlugin(pluginName);
-                await this.pm.loadSinglePlugin(pluginName);
-                return `✅ Plugin "${pluginName}" reloaded successfully.`;
-            } catch (error) {
-                return `❌ Failed to reload plugin "${pluginName}": ${error.message}`;
-            }
+        switch (args[0]) {
+            case 'reload':
+                if (args.length === 1) {
+                    // Reload all plugins
+                    try {
+                        await this.pm.reloadPlugins();
+                        return "✅ All plugins reloaded successfully.";
+                    } catch (error) {
+                        return `❌ Failed to reload plugins: ${error.message}`;
+                    }
+                } else {
+                    // Reload specific plugin
+                    const pluginName = args[1];
+                    try {
+                        await this.pm.unloadPlugin(pluginName);
+                        await this.pm.loadSinglePlugin(pluginName);
+                        return `✅ Plugin "${pluginName}" reloaded successfully.`;
+                    } catch (error) {
+                        return `❌ Failed to reload plugin "${pluginName}": ${error.message}`;
+                    }
+                }
+            case 'i':
+            case 'install':
+                if (!this.config.USE_PLUGIN_MARKETPLACE) {
+                    return "❌ Plugin marketplace is disabled. Install functionality is not available.";
+                }
+                if (args.length < 2) {
+                    return "❌ Please provide a plugin identifier to install.";
+                }
+                const pluginIdentifier = args[1];
+                const botData = await this.masterPlugin.bot.getMe();
+                const detailsResult = await this.marketplace.getMarketplacePluginDownloadUrl(pluginIdentifier, botData.id);
+                const pData = detailsResult.data;
+                let response = '';
+                if (detailsResult.success) {
+                    response = `⚠️ Are you sure you want to install plugin "${pData.name}"?\n\n` +
+                        `📝 Description: ${pData.description}\n` +
+                        `👤 Author: ${pData.author}\n` +
+                        `🏷️ Version: ${pData.current_version}`;
+                } else {
+                    response = `⚠️ Are you sure you want to install this plugin?`;
+                }
+
+                let keyboard = [
+                    [
+                        { text: "📥 Yes, Install", callback_data: `marketplace install ${pluginIdentifier}|${pData.download_uuid}` },
+                        { text: "❌ Cancel", callback_data: `marketplace detail ${pluginIdentifier}` }
+                    ]
+                ];
+
+                return {
+                    type: "text",
+                    text: response,
+                    options: {
+                        parse_mode: "Markdown",
+                        reply_markup: {
+                            inline_keyboard: keyboard
+                        }
+                    }
+                };
+            case 'enable':
+                if (args.length < 2) {
+                    return "❌ Please provide a plugin identifier to enable.";
+                }
+                const enablePluginName = args[1];
+                try {
+                    await this.pm.activatePlugin(enablePluginName);
+                    return `✅ Plugin "${enablePluginName}" has been enabled.`;
+                } catch (error) {
+                    return `❌ Failed to enable plugin "${enablePluginName}": ${error.message}`;
+                }
+            case 'disable':
+                if (args.length < 2) {
+                    return "❌ Please provide a plugin identifier to disable.";
+                }
+                const disablePluginName = args[1];
+                try {
+                    await this.pm.deactivatePlugin(disablePluginName);
+                    return `✅ Plugin "${disablePluginName}" has been disabled.`;
+                } catch (error) {
+                    return `❌ Failed to disable plugin "${disablePluginName}": ${error.message}`;
+                }
         }
     }
 
