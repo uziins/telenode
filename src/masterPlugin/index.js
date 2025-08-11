@@ -34,7 +34,7 @@ export default class MasterPlugin extends Plugin {
                 "`/su` - Access system management panel\n" +
                 "`/status` - Get system status report\n" +
                 "`/plugins` - List all loaded plugins\n" +
-                "`/plugin <command>` - Manage plugins (e.g., `/plugin reload`, `/plugin disable <name>`, etc.)\n" +
+                "`/plugin <command> <plugin_name>` - Manage plugins (available command: `reload`, `disable`, `enable`, `install`)\n" +
                 (this.pm.config.USE_PLUGIN_MARKETPLACE ? "`/marketplace` - Browse plugin marketplace\n" : "") +
                 "`/cache` - View cache statistics\n" +
                 "`/health` - Perform health check on the system",

@@ -88,6 +88,9 @@ export default class PluginHandler {
                 const pluginIdentifier = args[1];
                 const botData = await this.masterPlugin.bot.getMe();
                 const detailsResult = await this.marketplace.getMarketplacePluginDownloadUrl(pluginIdentifier, botData.id);
+                if (!detailsResult.success) {
+                    return `❌ ${detailsResult.message}`;
+                }
                 const pData = detailsResult.data;
                 let response = '';
                 if (detailsResult.success) {

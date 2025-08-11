@@ -360,7 +360,7 @@ export default Weather;
 ### Development Setup
 
 ```bash
-git clone https://github.com/yourusername/telenode.git
+git clone https://github.com/uziins/telenode.git
 cd telenode
 npm install
 npm run dev
@@ -385,10 +385,15 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## 📞 Support
 
-- 📖 [Documentation](https://github.com/yourusername/telenode/wiki)
-- 🐛 [Issue Tracker](https://github.com/yourusername/telenode/issues)
-- 💬 [Discussions](https://github.com/yourusername/telenode/discussions)
+- 📖 [Documentation](https://github.com/uziins/telenode/wiki)
+- 🐛 [Issue Tracker](https://github.com/uziins/telenode/issues)
+- 💬 [Discussions](https://github.com/uziins/telenode/discussions)
 
 ---
-
-Made with ❤️ by the TeleNode community
+```
+## 📚 Further Reading
+- [Telegram Bot API Documentation](https://core.telegram.org/bots/api)
+- [Node.js Documentation](https://nodejs.org/en/docs/)
+- [PM2 Documentation](https://pm2.keymetrics.io/docs/usage/quick-start/)
+- [MySQL Documentation](https://dev.mysql.com/doc/)
+```
