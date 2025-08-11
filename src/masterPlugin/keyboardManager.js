@@ -51,12 +51,12 @@ export default class KeyboardManager {
         // Conditionally add marketplace button based on config
         if (this.config.USE_PLUGIN_MARKETPLACE) {
             keyboard.push([
-                { text: "🔄 Reload All", callback_data: "reload_all_plugins" },
+                { text: "🔄 Reload All", callback_data: "plugin_management reload_all_plugins" },
                 { text: "➕ Add Plugin", callback_data: "marketplace" }
             ]);
         } else {
             keyboard.push([
-                { text: "🔄 Reload All", callback_data: "reload_all_plugins" }
+                { text: "🔄 Reload All", callback_data: "plugin_management reload_all_plugins" }
             ]);
         }
 
@@ -83,8 +83,8 @@ export default class KeyboardManager {
 
             if (marketplacePlugin) {
                 let installText = `🔄 Reinstall`;
-                if (marketplacePlugin.latest_version !== detail.version) {
-                    installText = `🔄 Update to ${marketplacePlugin.latest_version}`;
+                if (marketplacePlugin.current_version !== detail.version) {
+                    installText = `🔄 Update to ${marketplacePlugin.current_version}`;
                 }
                 keyboard.push([
                     { text: installText, callback_data: `plugin_management confirm_update ${pluginName}` }
@@ -119,15 +119,15 @@ export default class KeyboardManager {
         const btnPerRow = 2;
         let keyboard = [];
 
-        if (marketplaceResult.plugins && marketplaceResult.plugins.length > 0) {
-            for (let i = 0; i < marketplaceResult.plugins.length; i += btnPerRow) {
+        if (marketplaceResult.data && marketplaceResult.data.length > 0) {
+            for (let i = 0; i < marketplaceResult.data.length; i += btnPerRow) {
                 let row = [];
                 for (let j = 0; j < btnPerRow; j++) {
-                    let plugin = marketplaceResult.plugins[i + j];
+                    let plugin = marketplaceResult.data[i + j];
                     if (!plugin) break;
                     row.push({
                         text: plugin.name,
-                        callback_data: `marketplace detail ${plugin.code}`
+                        callback_data: `marketplace detail ${plugin.slug}`
                     });
                 }
                 keyboard.push(row);

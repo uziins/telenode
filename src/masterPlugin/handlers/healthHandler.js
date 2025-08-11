@@ -8,17 +8,6 @@ export default class HealthHandler {
     }
 
     async handleHealthCheck({message}) {
-        if (!this.auth.isRoot(message.from.id)) {
-            this.log.warn(`Unauthorized access attempt by user ${message.from.id} to health check`);
-            return;
-        }
-
-        // only process private messages
-        if (message.chat.type !== 'private') {
-            this.log.warn(`Health check can only be accessed in private messages`);
-            return;
-        }
-
         const health = performanceMonitor.getHealthStatus();
         const memStats = performanceMonitor.getMemoryStats();
 

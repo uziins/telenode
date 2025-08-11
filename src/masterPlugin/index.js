@@ -30,7 +30,8 @@ export default class MasterPlugin extends Plugin {
         return {
             name: "Master Plugin",
             description: "System management and monitoring plugin. This plugin provides system management, monitoring, and administrative functions.",
-            help: "`/su` - Access system management panel\n" +
+            help: "`/me` - Get your user information\n" +
+                "`/su` - Access system management panel\n" +
                 "`/status` - Get system status report\n" +
                 "`/plugins` - List all loaded plugins\n" +
                 (this.pm.config.USE_PLUGIN_MARKETPLACE ? "`/marketplace` - Browse plugin marketplace\n" : "") +
@@ -58,7 +59,8 @@ export default class MasterPlugin extends Plugin {
             plugins: this.pluginHandler.handlePluginList.bind(this.pluginHandler),
             reload: this.pluginHandler.handlePluginReload.bind(this.pluginHandler),
             cache: this.cacheHandler.handleCacheStats.bind(this.cacheHandler),
-            health: this.healthHandler.handleHealthCheck.bind(this.healthHandler)
+            health: this.healthHandler.handleHealthCheck.bind(this.healthHandler),
+            me: this.handleMe.bind(this)
         };
 
         // Only add marketplace command if marketplace is enabled
@@ -67,6 +69,25 @@ export default class MasterPlugin extends Plugin {
         }
 
         return commands;
+    }
+
+    async handleMe({ message }) {
+        if (message.chat.type !== 'private') return;
+
+        const { id: userId, username = "N/A", first_name: firstName = "N/A", last_name: lastName = "N/A", language_code: languageCode = "N/A" } = message.from;
+
+        const text = `👤 *Your Info*\n\n` +
+            `*User ID:* ${userId}\n` +
+            `*Username:* @${username}\n` +
+            `*First Name:* ${firstName}\n` +
+            `*Last Name:* ${lastName}\n` +
+            `*Language Code:* ${languageCode}`;
+
+        return {
+            type: "text",
+            text,
+            options: { parse_mode: "Markdown" }
+        };
     }
 
     async onCallbackQuery({message}) {
@@ -83,6 +104,8 @@ export default class MasterPlugin extends Plugin {
         }
 
         let [cmd, par1, par2] = message.data.split(" ");
+
+        console.log(`Callback query received: cmd=${cmd}, par1=${par1}, par2=${par2}, userId=${userId}, chatId=${chatId}`);
 
         try {
             let response, keyboard;

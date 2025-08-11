@@ -37,32 +37,19 @@ export default class Marketplace {
             const params = new URLSearchParams({
                 page: page.toString(),
                 limit: limit.toString(),
-                search
+                q: search.trim()
             });
 
-            const response = await this.makeRequest(`${this.pluginLibraryUrl}/plugins?${params}`);
-            return {
-                success: true,
-                data: {
-                    plugins: response.data,
-                    total: response.total,
-                    page: response.page,
-                    totalPages: response.pages,
-                    nextPage: response.nextPage,
-                    prevPage: response.prevPage
-                }
-            };
+            return await this.makeRequest(`${this.pluginLibraryUrl}/search-plugins?${params}`)
         } catch (error) {
             this.log.error('Failed to fetch marketplace plugins:', error);
             return {
                 success: false,
                 error: error.message,
-                data: {
-                    plugins: [],
-                    total: 0,
-                    page: 1,
-                    totalPages: 0
-                }
+                data: [],
+                total: 0,
+                page: 1,
+                totalPages: 0
             };
         }
     }
@@ -72,11 +59,7 @@ export default class Marketplace {
      */
     async getMarketplacePluginDetails(code) {
         try {
-            const response = await this.makeRequest(`${this.pluginLibraryUrl}/plugins/${code}`);
-            return {
-                success: true,
-                data: response
-            };
+            return await this.makeRequest(`${this.pluginLibraryUrl}/get-plugin/${code}`);
         } catch (error) {
             this.log.error(`Failed to fetch plugin details for ${code}:`, error);
             return {
@@ -87,31 +70,48 @@ export default class Marketplace {
     }
 
     /**
+     * Request plugin download URL from marketplace
+     * */
+    async getMarketplacePluginDownloadUrl(pluginCode, botId) {
+        try {
+            const requestBody = {
+                identifier: pluginCode,
+                timestamp: Math.floor(Date.now() / 1000),
+                bot_id: botId.toString()
+            };
+
+            return await this.makeRequest(`${this.pluginLibraryUrl}/request-download`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: requestBody
+            });
+        } catch (error) {
+            this.log.error(`Failed to get download URL for plugin ${pluginCode}:`, error);
+            return JSON.parse(error.data) || {
+                success: false,
+                error: error.message
+            }
+        }
+    }
+
+
+    /**
      * Download and install plugin from marketplace
      */
-    async installPlugin(pluginCode, version = 'latest') {
+    async installPlugin(pluginCode, uuid = null) {
         try {
-            this.log.info(`Installing plugin ${pluginCode} version ${version}`);
+            this.log.info(`Installing plugin ${pluginCode}`);
 
-            // Get plugin details first
-            const detailsResult = await this.getMarketplacePluginDetails(pluginCode);
-            if (!detailsResult.success) {
-                throw new Error(`Failed to get plugin details: ${detailsResult.error}`);
-            }
-
-            const pluginData = detailsResult.data;
-            if (version === 'latest') {
-                version = pluginData.latest_version;
-            }
-            // Fix URL construction - use absolute URL from marketplace API
-            const downloadUrl = `${this.pluginLibraryUrl}/download/${pluginCode}/${version}`;
+            const downloadUrl = `${this.pluginLibraryUrl}/download-plugin/${pluginCode}?uuid=${uuid}`;
 
             // Download plugin zip
-            const zipPath = path.join(this.tempDir, `${pluginCode}-${version}.zip`);
+            const zipPath = path.join(this.tempDir, `${pluginCode}.zip`);
             await this.downloadFile(downloadUrl, zipPath);
 
             // Install from zip
-            const result = await this.installFromZip(zipPath, pluginData);
+            const result = await this.installFromZip(zipPath);
 
             // Clean up temp file
             if (fs.existsSync(zipPath)) {
@@ -132,7 +132,7 @@ export default class Marketplace {
     /**
      * Install plugin from local zip file
      */
-    async installFromZip(zipPath, pluginData = null) {
+    async installFromZip(zipPath) {
         try {
             if (!fs.existsSync(zipPath)) {
                 throw new Error('Zip file not found');
@@ -338,13 +338,30 @@ export default class Marketplace {
     async makeRequest(url, options = {}) {
         return new Promise((resolve, reject) => {
             const client = url.startsWith('https:') ? https : http;
-            
-            const req = client.get(url, {
-                headers: {
-                    'User-Agent': 'TeleNode Framework',
-                    ...options.headers
+            const method = options.method ? options.method.toUpperCase() : 'GET';
+            const headers = {
+                'User-Agent': 'TeleNode Framework',
+                ...options.headers
+            };
+
+            let body = options.body;
+            if (body && typeof body === 'object' && !Buffer.isBuffer(body)) {
+                if (headers['Content-Type'] === 'application/json') {
+                    body = JSON.stringify(body);
                 }
-            }, (response) => {
+            }
+
+            if (body) {
+                headers['Content-Length'] = Buffer.byteLength(body);
+            }
+
+            const requestOptions = {
+                method,
+                headers,
+                timeout: 30000
+            };
+
+            const req = client.request(url, requestOptions, (response) => {
                 let data = '';
 
                 response.on('data', (chunk) => {
@@ -360,7 +377,11 @@ export default class Marketplace {
                             reject(new Error('Invalid JSON response'));
                         }
                     } else {
-                        reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
+                        reject(Object.assign(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`), {
+                            statusCode: response.statusCode,
+                            statusMessage: response.statusMessage,
+                            data
+                        }));
                     }
                 });
             });
@@ -373,6 +394,12 @@ export default class Marketplace {
                 req.destroy();
                 reject(new Error('Request timeout'));
             });
+
+            if (body) {
+                req.write(body);
+            }
+
+            req.end();
         });
     }
 }

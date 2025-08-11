@@ -103,8 +103,8 @@ export default class PluginHandler {
             const detail = await PluginTbl.upsertPlugin(pluginName);
 
             let updateText = "reinstall";
-            if (marketplacePlugin && marketplacePlugin.latest_version !== detail.version) {
-                updateText = `update to version ${marketplacePlugin.latest_version}`;
+            if (marketplacePlugin && marketplacePlugin.current_version !== detail.version) {
+                updateText = `update to version ${marketplacePlugin.current_version}`;
             }
 
             response = `⚠️ Are you sure you want to ${updateText} plugin "${pluginName}"?\n\nThis action will temporarily stop the plugin and may affect its current state.`;
@@ -148,6 +148,20 @@ export default class PluginHandler {
             return await this.handlePluginUpdate(par2, chatId, message);
         } else if (par1 === 'uninstall') {
             return await this.handlePluginUninstall(par2, chatId, message);
+        } else if (par1 === 'reload_all_plugins') {
+            // Check if user is root
+            if (!this.auth.isRoot(userId)) {
+                response = "❌ You do not have permission to reload all plugins.";
+                keyboard = await this.masterPlugin.keyboardManager.getPluginKeyboard();
+            } else {
+                try {
+                    await this.pm.reloadPlugins();
+                    response = "✅ All plugins reloaded successfully.";
+                } catch (error) {
+                    response = `❌ Failed to reload plugins: ${error.message}`;
+                }
+                keyboard = await this.masterPlugin.keyboardManager.getPluginKeyboard();
+            }
         } else {
             keyboard = await this.masterPlugin.keyboardManager.getPluginKeyboard();
         }
@@ -174,13 +188,15 @@ export default class PluginHandler {
 
         try {
             // First, try to get plugin details from marketplace
-            const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginName);
+            // const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginName);
+            const botData = await this.masterPlugin.bot.getMe();
+            const detailsResult = await this.marketplace.getMarketplacePluginDownloadUrl(pluginName, botData.id)
             if (detailsResult.success) {
                 // Uninstall current version first
                 const uninstallResult = await this.marketplace.uninstallPlugin(pluginName);
                 if (uninstallResult.success) {
                     // Install the latest version
-                    const installResult = await this.marketplace.installPlugin(pluginName);
+                    const installResult = await this.marketplace.installPlugin(pluginName, detailsResult.data.download_uuid);
                     if (installResult.success) {
                         response = `✅ Plugin "${pluginName}" updated successfully!`;
                         if (installResult.needsReload) {
@@ -221,6 +237,9 @@ export default class PluginHandler {
         });
 
         try {
+            // disable the plugin first
+            await this.pm.deactivatePlugin(pluginName);
+            // Now uninstall the plugin
             const uninstallResult = await this.marketplace.uninstallPlugin(pluginName);
             if (uninstallResult.success) {
                 response = `✅ Plugin "${pluginName}" uninstalled successfully!`;

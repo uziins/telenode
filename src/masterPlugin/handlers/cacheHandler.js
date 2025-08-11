@@ -8,17 +8,6 @@ export default class CacheHandler {
     }
 
     async handleCacheStats({message}) {
-        if (!this.auth.isRoot(message.from.id)) {
-            this.log.warn(`Unauthorized access attempt by user ${message.from.id} to cache stats`);
-            return;
-        }
-
-        // only process private messages
-        if (message.chat.type !== 'private') {
-            this.log.warn(`Cache stats can only be accessed in private messages`);
-            return;
-        }
-
         const cacheStats = globalCache.getStats();
         const authStats = this.auth.getStats();
 

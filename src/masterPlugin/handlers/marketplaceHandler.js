@@ -59,34 +59,35 @@ export default class MarketplaceHandler {
         if (par1 === 'detail') {
             const pluginCode = par2;
             const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginCode);
+
             if (detailsResult.success) {
                 const plugin = detailsResult.data;
                 response = `🔌 *${plugin.name}*\n\n` +
                          `📝 ${plugin.description}\n` +
                          `👤 Author: ${plugin.author}\n` +
-                         `🏷️ Version: ${plugin.latest_version}\n` +
-                         `📥 Downloads: ${plugin.total_downloads}`;
+                         `🏷️ Version: ${plugin.current_version}\n` +
+                         `📥 Downloads: ${plugin.downloads}`;
             } else {
                 response = `❌ Plugin details not found: ${detailsResult.error}`;
             }
             keyboard = await this.masterPlugin.keyboardManager.getMarketplaceDetailKeyboard(pluginCode);
         } else if (par1 === 'confirm_install') {
+            const botData = await this.masterPlugin.bot.getMe();
             const pluginCode = par2;
-            const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginCode);
-
+            const detailsResult = await this.marketplace.getMarketplacePluginDownloadUrl(pluginCode, botData.id);
+            const pData = detailsResult.data;
             if (detailsResult.success) {
-                const plugin = detailsResult.data;
-                response = `⚠️ Are you sure you want to install plugin "${plugin.name}"?\n\n` +
-                         `📝 Description: ${plugin.description}\n` +
-                         `👤 Author: ${plugin.author}\n` +
-                         `🏷️ Version: ${plugin.latest_version}`;
+                response = `⚠️ Are you sure you want to install plugin "${pData.name}"?\n\n` +
+                         `📝 Description: ${pData.description}\n` +
+                         `👤 Author: ${pData.author}\n` +
+                         `🏷️ Version: ${pData.current_version}`;
             } else {
                 response = `⚠️ Are you sure you want to install this plugin?`;
             }
 
             keyboard = [
                 [
-                    { text: "📥 Yes, Install", callback_data: `marketplace install ${pluginCode}` },
+                    { text: "📥 Yes, Install", callback_data: `marketplace install ${pluginCode}|${pData.download_uuid}` },
                     { text: "❌ Cancel", callback_data: `marketplace detail ${pluginCode}` }
                 ]
             ];
@@ -98,7 +99,7 @@ export default class MarketplaceHandler {
                 const plugin = detailsResult.data;
                 response = `⚠️ Are you sure you want to reinstall plugin "${plugin.name}"?\n\n` +
                          `This will remove the current version and install the latest version.\n` +
-                         `📝 Latest Version: ${plugin.latest_version}`;
+                         `📝 Latest Version: ${plugin.current_version}`;
             } else {
                 response = `⚠️ Are you sure you want to reinstall this plugin?`;
             }
@@ -156,8 +157,12 @@ export default class MarketplaceHandler {
             parse_mode: "Markdown"
         });
 
+        const pluginCodeParts = pluginCode.split('|');
+        const pluginIdentifier = pluginCodeParts[0];
+        const downloadUuid = pluginCodeParts[1] || null;
+
         // Install plugin
-        const installResult = await this.marketplace.installPlugin(pluginCode);
+        const installResult = await this.marketplace.installPlugin(pluginIdentifier, downloadUuid);
         if (installResult.success) {
             response = `✅ Plugin "${installResult.pluginName}" installed successfully!`;
             if (installResult.needsReload) {
