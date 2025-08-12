@@ -105,8 +105,6 @@ export default class MasterPlugin extends Plugin {
 
         let [cmd, par1, par2] = message.data.split(" ");
 
-        console.log(`Callback query received: cmd=${cmd}, par1=${par1}, par2=${par2}, userId=${userId}, chatId=${chatId}`);
-
         try {
             let response, keyboard;
 
