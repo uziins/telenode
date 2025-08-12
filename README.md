@@ -390,10 +390,9 @@ MIT License - see [LICENSE](LICENSE) for details.
 - 💬 [Discussions](https://github.com/uziins/telenode/discussions)
 
 ---
-```
+
 ## 📚 Further Reading
 - [Telegram Bot API Documentation](https://core.telegram.org/bots/api)
 - [Node.js Documentation](https://nodejs.org/en/docs/)
 - [PM2 Documentation](https://pm2.keymetrics.io/docs/usage/quick-start/)
 - [MySQL Documentation](https://dev.mysql.com/doc/)
-```
