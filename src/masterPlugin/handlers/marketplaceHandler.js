@@ -92,21 +92,22 @@ export default class MarketplaceHandler {
                 ]
             ];
         } else if (par1 === 'confirm_reinstall') {
+            const botData = await this.masterPlugin.bot.getMe();
             const pluginCode = par2;
-            const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginCode);
+            const detailsResult = await this.marketplace.getMarketplacePluginDownloadUrl(pluginCode, botData.id);
 
+            const pData = detailsResult.data;
             if (detailsResult.success) {
-                const plugin = detailsResult.data;
-                response = `⚠️ Are you sure you want to reinstall plugin "${plugin.name}"?\n\n` +
+                response = `⚠️ Are you sure you want to reinstall plugin "${pData.name}"?\n\n` +
                          `This will remove the current version and install the latest version.\n` +
-                         `📝 Latest Version: ${plugin.current_version}`;
+                         `📝 Latest Version: ${pData.current_version}`;
             } else {
                 response = `⚠️ Are you sure you want to reinstall this plugin?`;
             }
 
             keyboard = [
                 [
-                    { text: "🔄 Yes, Reinstall", callback_data: `marketplace install ${pluginCode}` },
+                    { text: "🔄 Yes, Reinstall", callback_data: `marketplace install ${pluginCode}|${pData.download_uuid}` },
                     { text: "❌ Cancel", callback_data: `marketplace detail ${pluginCode}` }
                 ]
             ];
@@ -166,7 +167,7 @@ export default class MarketplaceHandler {
         if (installResult.success) {
             response = `✅ Plugin "${installResult.pluginName}" installed successfully!`;
             if (installResult.needsReload) {
-                response += "\n\n⚠️ Please reload plugins to activate.";
+                await this.pm.reloadPlugins();
             }
         } else {
             response = `❌ Installation failed: ${installResult.error}`;

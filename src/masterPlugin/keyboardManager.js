@@ -161,8 +161,7 @@ export default class KeyboardManager {
 
     async getMarketplaceDetailKeyboard(pluginCode) {
         // Check if plugin is already installed
-        const installedPlugins = await PluginTbl.get();
-        const isInstalled = installedPlugins.some(p => p.identifier === pluginCode);
+        const isInstalled = await PluginTbl.where('identifier', pluginCode).first();
 
         let keyboard = [];
 

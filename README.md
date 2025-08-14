@@ -239,7 +239,9 @@ npm run plugin:remove <name>
 
 Master plugin commands:
 - `/plugins` - List loaded plugins
-- `/reload [plugin]` - Reload plugin(s)
+- `/plugin reload` - Reload all plugins
+- `/plugin reload [plugin]` - Reload plugin
+- `/plugin install [plugin]` - Install a plugin from the marketplace
 - `/su` - System management panel
 
 ## 📊 Monitoring & Health
