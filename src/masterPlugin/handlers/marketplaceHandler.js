@@ -87,7 +87,7 @@ export default class MarketplaceHandler {
 
             keyboard = [
                 [
-                    { text: "📥 Yes, Install", callback_data: `marketplace install ${pluginCode}|${pData.download_uuid}` },
+                    { text: "📥 Yes, Install", callback_data: `marketplace install ${pluginCode}|${pData.download_code}` },
                     { text: "❌ Cancel", callback_data: `marketplace detail ${pluginCode}` }
                 ]
             ];
@@ -107,7 +107,7 @@ export default class MarketplaceHandler {
 
             keyboard = [
                 [
-                    { text: "🔄 Yes, Reinstall", callback_data: `marketplace install ${pluginCode}|${pData.download_uuid}` },
+                    { text: "🔄 Yes, Reinstall", callback_data: `marketplace install ${pluginCode}|${pData.download_code}` },
                     { text: "❌ Cancel", callback_data: `marketplace detail ${pluginCode}` }
                 ]
             ];

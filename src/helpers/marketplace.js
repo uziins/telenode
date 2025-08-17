@@ -100,11 +100,11 @@ export default class Marketplace {
     /**
      * Download and install plugin from marketplace
      */
-    async installPlugin(pluginCode, uuid = null) {
+    async installPlugin(pluginCode, code = null) {
         try {
             this.log.info(`Installing plugin ${pluginCode}`);
 
-            const downloadUrl = `${this.pluginLibraryUrl}/download-plugin/${pluginCode}?uuid=${uuid}`;
+            const downloadUrl = `${this.pluginLibraryUrl}/download-plugin/${pluginCode}?code=${code}`;
 
             // Download plugin zip
             const zipPath = path.join(this.tempDir, `${pluginCode}.zip`);
