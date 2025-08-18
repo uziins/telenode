@@ -5,6 +5,7 @@ import http from 'http';
 import AdmZip from 'adm-zip';
 import Logger from '../logger.js';
 import PluginModel from "../models/plugins.js";
+import PluginPackageManager from './pluginPackageManager.js';
 
 const PluginTbl = new PluginModel();
 
@@ -14,6 +15,7 @@ export default class Marketplace {
         this.log = Logger(config.APP_NAME, 'Marketplace', config.LOG_LEVEL);
         this.pluginsDir = 'plugins';
         this.tempDir = 'tmp';
+        this.packageManager = new PluginPackageManager(config);
 
         this.pluginLibraryUrl = config.MARKETPLACE_URL;
         
@@ -191,6 +193,14 @@ export default class Marketplace {
                 // Clean up on failure
                 fs.rmSync(pluginDir, { recursive: true, force: true });
                 throw new Error('Invalid package.json: missing name or main field');
+            }
+
+            // Install dependencies using plugin name
+            const installResult = await this.packageManager.installPluginDependencies(pluginName);
+            if (!installResult.success) {
+                // Clean up on failure
+                fs.rmSync(pluginDir, { recursive: true, force: true });
+                throw new Error(`Failed to install dependencies: ${installResult.error}`);
             }
 
             this.log.info(`Plugin ${pluginName} installed successfully`);

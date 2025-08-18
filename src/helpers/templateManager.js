@@ -57,7 +57,8 @@ export default class TemplateManager {
             VISIBILITY: options.visibility || 'USER',
             USAGE: options.usage || 'Main plugin command',
             DEPENDENCIES: JSON.stringify(options.dependencies || {}, null, 2),
-            DEPENDENCIES_LIST: this.generateDependenciesList(options.dependencies)
+            DEPENDENCIES_LIST: this.generateDependenciesList(options.dependencies),
+            TYPE: options.type || 'NORMAL',
         };
 
         // Generate files

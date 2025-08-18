@@ -441,30 +441,6 @@ export default class PluginManager {
         }
     }
 
-    async getPluginStatus(pluginName) {
-        try {
-            const dbPlugin = await PluginTbl.where("identifier", pluginName).first();
-            return {
-                exists: !!dbPlugin,
-                is_active: dbPlugin ? dbPlugin.is_active : false,
-                is_loaded: this.isPluginLoaded(pluginName)
-            };
-        } catch (error) {
-            this.log.error(`Error getting plugin status ${pluginName}:`, error);
-            return { exists: false, is_active: false, is_loaded: false };
-        }
-    }
-
-    // Plugin Package Management Methods
-    async createPlugin(pluginName, options = {}) {
-        try {
-            return await this.packageManager.createPluginTemplate(pluginName, options);
-        } catch (error) {
-            this.log.error(`Error creating plugin ${pluginName}:`, error);
-            throw error;
-        }
-    }
-
     async installPluginDependencies(pluginName) {
         try {
             return await this.packageManager.installPluginDependencies(pluginName);
