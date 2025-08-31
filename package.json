@@ -6,9 +6,7 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js --inspect",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest",
-    "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
-    "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage",
+    "test": "node test.js",
     "logs": "tail -f logs/*.log",
     "clean": "rm -rf logs/*.log",
     "setup": "node bin/setup.js",

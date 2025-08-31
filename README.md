@@ -56,19 +56,23 @@ A high-performance, plugin-based Telegram Bot framework built with Node.js. Tele
 
 ### Environment Variables
 
-| Variable        | Description                           | Default    | Required |
-|-----------------|---------------------------------------|------------|----------|
-| `BOT_TOKEN`     | Telegram Bot API token                | -          | ✓        |
-| `BOT_SUDOERS`   | Comma-separated list of root user IDs | -          | ✓        |
-| `DB_HOST`       | MySQL database host                   | localhost  | ✓        |
-| `DB_PORT`       | MySQL database port                   | 3306       | ✓        |
-| `DB_DATABASE`   | Database name                         | -          | ✓        |
-| `DB_USER`       | Database username                     | -          | ✓        |
-| `DB_PASSWORD`   | Database password                     | -          | ✓        |
-| `UPDATE_MODE`   | Bot update mode (polling/webhook)     | polling    | -        |
-| `WEBHOOK_URL`   | Webhook URL for webhook mode          | -          | -        |
-| `APP_PORT`      | Application port                      | 8001       | ✓        |
-| `LOG_LEVEL`     | Logging level                         | info       | -        |
+| Variable                  | Description                           | Default    | Required |
+|---------------------------|---------------------------------------|------------|----------|
+| `APP_NAME`               | Application name                      | TeleNode   | ✓        |
+| `APP_ENV`                | Application environment               | local      | ✓        |
+| `LOG_LEVEL`              | Logging level (error,warn,info,etc.)  | error      | -        |
+| `LOG_CHANNEL`            | Log channel (stack,daily,console)    | stack      | -        |
+| `BOT_TOKEN`              | Telegram Bot API token                | -          | ✓        |
+| `BOT_SUDOERS`            | Comma-separated list of root user IDs | -          | ✓        |
+| `DB_HOST`                | MySQL database host                   | localhost  | ✓        |
+| `DB_PORT`                | MySQL database port                   | 3306       | ✓        |
+| `DB_DATABASE`            | Database name                         | -          | ✓        |
+| `DB_USER`                | Database username                     | -          | ✓        |
+| `DB_PASSWORD`            | Database password                     | -          | ✓        |
+| `UPDATE_MODE`            | Bot update mode (polling/webhook)     | polling    | -        |
+| `WEBHOOK_URL`            | Webhook URL for webhook mode          | -          | -        |
+| `APP_PORT`               | Application port                      | 8001       | ✓        |
+| `USE_PLUGIN_MARKETPLACE` | Enable plugin marketplace             | True       | -        |
 
 ### Interactive Setup
 

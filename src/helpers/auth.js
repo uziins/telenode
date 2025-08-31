@@ -19,6 +19,9 @@ export default class Auth {
         this.cacheTimeout = config.cache.ttl * 1000; // Convert to milliseconds
         this.maxCacheSize = config.cache.maxSize;
 
+        // Store database connections for cleanup
+        this.dbConnections = [this.authorizations, Chat, User];
+
         // Cleanup interval for cache
         this.cacheCleanupInterval = setInterval(() => {
             this.cleanupCache();
@@ -99,60 +102,6 @@ export default class Auth {
             value,
             timestamp: Date.now()
         });
-    }
-
-    async addAdmin(user_id, chat_id) {
-        try {
-            if (await this.authorizations.addAdmin(user_id, chat_id)) {
-                if (!this.admin.some(a => a.user_id === user_id && a.chat_id === chat_id)) {
-                    this.admin.push({user_id, chat_id});
-                }
-
-                // Clear relevant cache entries
-                this.clearUserCache(user_id, chat_id);
-
-                log.info(`Added admin: user_id=${user_id}, chat_id=${chat_id}`);
-                return true;
-            }
-            return false;
-        } catch (error) {
-            log.error(`Failed to add admin:`, error);
-            throw error;
-        }
-    }
-
-    async removeAdmin(user_id, chat_id) {
-        try {
-            if (await this.authorizations.removeAdmin(user_id, chat_id)) {
-                this.admin = this.admin.filter(a =>
-                    !(a.user_id === user_id && a.chat_id === chat_id)
-                );
-
-                // Clear relevant cache entries
-                this.clearUserCache(user_id, chat_id);
-
-                log.info(`Removed admin: user_id=${user_id}, chat_id=${chat_id}`);
-                return true;
-            }
-            return false;
-        } catch (error) {
-            log.error(`Failed to remove admin:`, error);
-            throw error;
-        }
-    }
-
-    clearUserCache(user_id, chat_id = null) {
-        const patterns = [
-            `user:${user_id}`,
-            `chat:${chat_id}`,
-            `granted:${user_id}:${chat_id}`
-        ];
-
-        for (const [key] of this.cache.entries()) {
-            if (patterns.some(pattern => key.includes(pattern))) {
-                this.cache.delete(key);
-            }
-        }
     }
 
     async isGranted(message) {
@@ -262,106 +211,40 @@ export default class Auth {
         return this.admin.some(a => a.user_id === user_id && a.chat_id === chat_id);
     }
 
-    // Enhanced permission checking methods
-    async hasPermission(user_id, chat_id, permission) {
-        if (this.isRoot(user_id)) return true;
-        if (this.isAdmin(user_id, chat_id)) return true;
-
-        // Add more granular permission checking here if needed
-        return false;
-    }
-
-    async blockUser(user_id, reason = null) {
-        try {
-            await User.where("id", user_id).update({
-                is_blocked: true,
-                blocked_reason: reason,
-                blocked_at: new Date()
-            });
-
-            this.clearUserCache(user_id);
-            log.info(`Blocked user ${user_id}. Reason: ${reason || 'No reason provided'}`);
-            return true;
-        } catch (error) {
-            log.error(`Failed to block user ${user_id}:`, error);
-            return false;
-        }
-    }
-
-    async unblockUser(user_id) {
-        try {
-            await User.where("id", user_id).update({
-                is_blocked: false,
-                blocked_reason: null,
-                blocked_at: null
-            });
-
-            this.clearUserCache(user_id);
-            log.info(`Unblocked user ${user_id}`);
-            return true;
-        } catch (error) {
-            log.error(`Failed to unblock user ${user_id}:`, error);
-            return false;
-        }
-    }
-
-    async blockChat(chat_id, reason = null) {
-        try {
-            await Chat.where("id", chat_id).update({
-                is_blocked: true,
-                blocked_reason: reason,
-                blocked_at: new Date()
-            });
-
-            this.clearUserCache(null, chat_id);
-            log.info(`Blocked chat ${chat_id}. Reason: ${reason || 'No reason provided'}`);
-            return true;
-        } catch (error) {
-            log.error(`Failed to block chat ${chat_id}:`, error);
-            return false;
-        }
-    }
-
-    async unblockChat(chat_id) {
-        try {
-            await Chat.where("id", chat_id).update({
-                is_blocked: false,
-                blocked_reason: null,
-                blocked_at: null
-            });
-
-            this.clearUserCache(null, chat_id);
-            log.info(`Unblocked chat ${chat_id}`);
-            return true;
-        } catch (error) {
-            log.error(`Failed to unblock chat ${chat_id}:`, error);
-            return false;
-        }
-    }
-
-    // Statistics and monitoring
-    getStats() {
-        return {
-            cacheSize: this.cache.size,
-            maxCacheSize: this.maxCacheSize,
-            adminCount: this.admin.length,
-            rootUsersCount: this.root.length,
-            cacheHitRate: this.getCacheHitRate()
-        };
-    }
-
-    getCacheHitRate() {
-        // This would need to be implemented with counters
-        // for tracking cache hits vs misses
-        return 0; // Placeholder
-    }
-
-    // Cleanup method
-    destroy() {
+    // Enhanced cleanup method to fix Jest teardown issue
+    async destroy() {
+        // Clear the cache cleanup interval
         if (this.cacheCleanupInterval) {
             clearInterval(this.cacheCleanupInterval);
+            this.cacheCleanupInterval = null;
         }
+
+        // Clear the cache
         this.cache.clear();
-        log.debug('Auth helper destroyed');
+
+        // Close database connections if they have a close method
+        for (const connection of this.dbConnections || []) {
+            if (connection && typeof connection.close === 'function') {
+                try {
+                    await connection.close();
+                } catch (error) {
+                    log.debug('Error closing database connection:', error);
+                }
+            }
+            // For letsql models, try to close the underlying connection
+            if (connection && connection.connection && typeof connection.connection.end === 'function') {
+                try {
+                    await connection.connection.end();
+                } catch (error) {
+                    log.debug('Error closing underlying database connection:', error);
+                }
+            }
+        }
+
+        // Clear references
+        this.dbConnections = [];
+        this.admin = [];
+
+        log.debug('Auth helper destroyed and cleaned up');
     }
 }
