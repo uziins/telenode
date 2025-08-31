@@ -76,6 +76,25 @@ async function preparingDatabase() {
         }
     });
 
+    // check table configurations exists
+    await User.rawQuery('SHOW TABLES LIKE "configurations"').then(async (result) => {
+        if (result.length === 0) {
+            await User.rawQuery('CREATE TABLE IF NOT EXISTS configurations (' +
+                'id INT AUTO_INCREMENT PRIMARY KEY,' +
+                '`key` VARCHAR(255) NOT NULL UNIQUE,' +
+                'value JSON,' +
+                'type ENUM("string", "number", "boolean", "array", "object") DEFAULT "string",' +
+                'category ENUM("general", "global", "system", "plugin") DEFAULT "general",' +
+                'is_encrypted BOOLEAN DEFAULT 0,' +
+                'description TEXT,' +
+                'created_by VARCHAR(255),' +
+                'updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,' +
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)').then(() => {
+                console.log('Table configurations created')
+            });
+        }
+    });
+
     // check table authorizations exists
     await User.rawQuery('SHOW TABLES LIKE "authorizations"').then(async (result) => {
         if (result.length === 0) {

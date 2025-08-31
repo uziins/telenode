@@ -6,6 +6,7 @@ import CacheHandler from "./handlers/cacheHandler.js";
 import HealthHandler from "./handlers/healthHandler.js";
 import HelpHandler from "./handlers/helpHandler.js";
 import MarketplaceHandler from "./handlers/marketplaceHandler.js";
+import ConfigHandler from "./handlers/configHandler.js";
 import KeyboardManager from "./keyboardManager.js";
 
 export default class MasterPlugin extends Plugin {
@@ -23,6 +24,7 @@ export default class MasterPlugin extends Plugin {
         this.healthHandler = new HealthHandler(this);
         this.helpHandler = new HelpHandler(this);
         this.marketplaceHandler = new MarketplaceHandler(this);
+        this.configHandler = new ConfigHandler(this);
         this.keyboardManager = new KeyboardManager(this);
     }
 
@@ -37,7 +39,10 @@ export default class MasterPlugin extends Plugin {
                 "`/plugin <command> <plugin_name>` - Manage plugins (available command: `reload`, `disable`, `enable`, `install`)\n" +
                 (this.pm.config.USE_PLUGIN_MARKETPLACE ? "`/marketplace` - Browse plugin marketplace\n" : "") +
                 "`/cache` - View cache statistics\n" +
-                "`/health` - Perform health check on the system",
+                "`/health` - Perform health check on the system\n" +
+                "`/config` - Runtime configuration management\n" +
+                "`/config set <key> <value>` - Set configuration value\n" +
+                "`/config plugin <plugin> <key> <value>` - Set plugin configuration",
             visibility: Plugin.VISIBILITY.ROOT,
             version: "2.0.0",
             author: "TeleNode Framework"
@@ -47,7 +52,7 @@ export default class MasterPlugin extends Plugin {
     get commands() {
         // Ensure handlers are initialized before binding commands
         if (!this.helpHandler || !this.systemHandler || !this.pluginHandler ||
-            !this.marketplaceHandler || !this.cacheHandler || !this.healthHandler) {
+            !this.marketplaceHandler || !this.cacheHandler || !this.healthHandler || !this.configHandler) {
             this.log?.warn('Handlers not yet initialized when commands getter was called');
             return {};
         }
@@ -60,7 +65,8 @@ export default class MasterPlugin extends Plugin {
             plugin: this.pluginHandler.handlePluginCommand.bind(this.pluginHandler),
             cache: this.cacheHandler.handleCacheStats.bind(this.cacheHandler),
             health: this.healthHandler.handleHealthCheck.bind(this.healthHandler),
-            me: this.handleMe.bind(this)
+            me: this.handleMe.bind(this),
+            config: this.handleConfigCommand.bind(this)
         };
 
         // Only add marketplace command if marketplace is enabled
@@ -176,6 +182,32 @@ export default class MasterPlugin extends Plugin {
                 text: "❌ An error occurred",
                 show_alert: true
             });
+        }
+    }
+
+    async handleConfigCommand({message, args}) {
+        if (args.length === 0) {
+            return await this.configHandler.handleConfigMenu({message});
+        }
+
+        const subCommand = args[0].toLowerCase();
+        const subArgs = args.slice(1);
+
+        switch (subCommand) {
+            case 'set':
+                return await this.configHandler.handleConfigSet({message, args: subArgs});
+            case 'get':
+                return await this.configHandler.handleConfigGet({message, args: subArgs});
+            case 'delete':
+            case 'del':
+                return await this.configHandler.handleConfigDelete({message, args: subArgs});
+            case 'list':
+            case 'ls':
+                return await this.configHandler.handleConfigList({message, args: subArgs});
+            case 'plugin':
+                return await this.configHandler.handleConfigPlugin({message, args: subArgs});
+            default:
+                return "❌ Unknown config command. Use `/config` to see available options.";
         }
     }
 }

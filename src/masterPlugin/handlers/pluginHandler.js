@@ -104,7 +104,7 @@ export default class PluginHandler {
 
                 let keyboard = [
                     [
-                        { text: "📥 Yes, Install", callback_data: `marketplace install ${pluginIdentifier}|${pData.download_uuid}` },
+                        { text: "📥 Yes, Install", callback_data: `marketplace install ${pluginIdentifier}|${pData.download_code}` },
                         { text: "❌ Cancel", callback_data: `marketplace detail ${pluginIdentifier}` }
                     ]
                 ];
@@ -255,7 +255,6 @@ export default class PluginHandler {
 
         try {
             // First, try to get plugin details from marketplace
-            // const detailsResult = await this.marketplace.getMarketplacePluginDetails(pluginName);
             const botData = await this.masterPlugin.bot.getMe();
             const detailsResult = await this.marketplace.getMarketplacePluginDownloadUrl(pluginName, botData.id)
             if (detailsResult.success) {

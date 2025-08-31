@@ -1,4 +1,5 @@
 import Logger from "./logger.js";
+import Configurations from "./models/configurations.js";
 
 /**
  * @typedef {Object} Handlers
@@ -59,6 +60,14 @@ export default class Plugin {
         this._commandRateLimit = new Map();
         this._rateLimitWindow = 60000; // 1 minute
         this._maxCommandsPerWindow = 30;
+
+        // Initialize configurations model
+        this._configurations = new Configurations();
+        
+        // Configuration cache
+        this._configCache = new Map();
+        this._cacheExpiry = new Map();
+        this._cacheTimeout = 5 * 60 * 1000; // 5 minutes cache
 
         // Note: Plugin name will be set by PluginManager when the plugin is loaded
         this.log = Logger('', 'Plugin');
@@ -262,7 +271,7 @@ export default class Plugin {
         if (result === undefined || result === null) return;
 
         if (typeof result === "string" || typeof result === "number") {
-            await this.sendMessage(message.chat.id, String(result));
+            await this.sendMessage(message.chat.id, String(result), { parse_mode: "Markdown" });
         } else if (typeof result === "object" && result.type) {
             await this.handleTypedResult(result, message);
         }
@@ -320,6 +329,295 @@ export default class Plugin {
         }
     }
 
+    /**
+     * Get configuration value for this plugin from cache or database
+     * @param {string} key - Configuration key
+     * @param {any} defaultValue - Default value if not found
+     * @param {boolean} forceRefresh - Force refresh from database bypassing cache
+     * @returns {Promise<any>}
+     */
+    async getConfig(key, defaultValue = null, forceRefresh = false) {
+        try {
+            const pluginName = this._pluginName;
+            if (!pluginName) {
+                this.log.warn('Plugin name not set, cannot get config from database');
+                return defaultValue;
+            }
+
+            const cacheKey = `${pluginName}.${key}`;
+            
+            // Check cache first (unless force refresh is requested)
+            if (!forceRefresh && this._isConfigCacheValid(cacheKey)) {
+                const cachedValue = this._configCache.get(cacheKey);
+                this.log.debug(`Config ${key} retrieved from cache`);
+                return cachedValue;
+            }
+
+            // Cache miss or expired, fetch from database
+            const value = await this._configurations.getPluginConfig(pluginName, key, defaultValue);
+            
+            // Cache the result (even if it's the default value)
+            this._setConfigCache(cacheKey, value);
+            
+            this.log.debug(`Config ${key} retrieved from database and cached`);
+            return value;
+            
+        } catch (error) {
+            this.log.error('Error getting config from database:', error);
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Set configuration value for this plugin in database and update cache
+     * @param {string} key - Configuration key
+     * @param {any} value - Configuration value
+     * @param {Object} options - Additional options (description, createdBy, etc.)
+     * @returns {Promise<boolean>}
+     */
+    async setConfig(key, value, options = {}) {
+        try {
+            const pluginName = this._pluginName;
+            if (!pluginName) {
+                this.log.warn('Plugin name not set, cannot save config to database');
+                return false;
+            }
+            
+            const result = await this._configurations.setPluginConfig(pluginName, key, value, {
+                ...options,
+                createdBy: options.createdBy || 'plugin',
+                description: options.description || `${pluginName} plugin configuration: ${key}`
+            });
+            
+            if (result) {
+                // Update cache with new value
+                const cacheKey = `${pluginName}.${key}`;
+                this._setConfigCache(cacheKey, value);
+                
+                this.log.info(`Config ${key} saved to database and cache updated`);
+            } else {
+                this.log.warn(`Failed to save config ${key} to database`);
+            }
+            
+            return result;
+        } catch (error) {
+            this.log.error('Error setting config in database:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Delete configuration value for this plugin from database and cache
+     * @param {string} key - Configuration key
+     * @returns {Promise<boolean>}
+     */
+    async deleteConfig(key) {
+        try {
+            const pluginName = this._pluginName;
+            if (!pluginName) {
+                this.log.warn('Plugin name not set, cannot delete config from database');
+                return false;
+            }
+            
+            const result = await this._configurations.deletePluginConfig(pluginName, key);
+            
+            if (result) {
+                // Remove from cache
+                const cacheKey = `${pluginName}.${key}`;
+                this._configCache.delete(cacheKey);
+                this._cacheExpiry.delete(cacheKey);
+                
+                this.log.info(`Config ${key} deleted from database and cache`);
+            } else {
+                this.log.warn(`Failed to delete config ${key} from database`);
+            }
+            
+            return result;
+        } catch (error) {
+            this.log.error('Error deleting config from database:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Clear configuration cache for this plugin
+     * @param {string} key - Specific key to clear, or null to clear all
+     */
+    clearConfigCache(key = null) {
+        const pluginName = this._pluginName;
+        if (!pluginName) return;
+
+        if (key) {
+            // Clear specific key
+            const cacheKey = `${pluginName}.${key}`;
+            this._configCache.delete(cacheKey);
+            this._cacheExpiry.delete(cacheKey);
+            this.log.debug(`Cache cleared for config ${key}`);
+        } else {
+            // Clear all configs for this plugin
+            const prefix = `${pluginName}.`;
+            for (const cacheKey of this._configCache.keys()) {
+                if (cacheKey.startsWith(prefix)) {
+                    this._configCache.delete(cacheKey);
+                    this._cacheExpiry.delete(cacheKey);
+                }
+            }
+            this.log.debug(`All config cache cleared for plugin ${pluginName}`);
+        }
+    }
+
+    /**
+     * Check if config cache is valid (not expired)
+     * @param {string} cacheKey - Cache key
+     * @returns {boolean}
+     * @private
+     */
+    _isConfigCacheValid(cacheKey) {
+        if (!this._configCache.has(cacheKey)) {
+            return false;
+        }
+
+        const expiry = this._cacheExpiry.get(cacheKey);
+        if (!expiry || Date.now() > expiry) {
+            // Cache expired, remove it
+            this._configCache.delete(cacheKey);
+            this._cacheExpiry.delete(cacheKey);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Set config cache with expiry
+     * @param {string} cacheKey - Cache key
+     * @param {any} value - Value to cache
+     * @private
+     */
+    _setConfigCache(cacheKey, value) {
+        this._configCache.set(cacheKey, value);
+        this._cacheExpiry.set(cacheKey, Date.now() + this._cacheTimeout);
+    }
+
+    /**
+     * Get configuration value for this plugin from database
+     * @param {string} key - Configuration key
+     * @param {any} defaultValue - Default value if not found
+     * @returns {Promise<any>}
+     */
+    async getConfigFromDB(key, defaultValue = null) {
+        try {
+            const pluginName = this._pluginName;
+            if (!pluginName) {
+                this.log.warn('Plugin name not set, cannot get config from database');
+                return defaultValue;
+            }
+            return await this._configurations.getPluginConfig(pluginName, key, defaultValue);
+        } catch (error) {
+            this.log.error('Error getting config from database:', error);
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Set configuration value for this plugin in database
+     * @param {string} key - Configuration key
+     * @param {any} value - Configuration value
+     * @param {Object} options - Additional options (description, createdBy, etc.)
+     * @returns {Promise<boolean>}
+     */
+    async setConfigInDB(key, value, options = {}) {
+        try {
+            const pluginName = this._pluginName;
+            if (!pluginName) {
+                this.log.warn('Plugin name not set, cannot save config to database');
+                return false;
+            }
+
+            const result = await this._configurations.setPluginConfig(pluginName, key, value, {
+                ...options,
+                createdBy: options.createdBy || 'plugin',
+                description: options.description || `${pluginName} plugin configuration: ${key}`
+            });
+
+            if (result) {
+                this.log.info(`Config ${key} saved to database successfully`);
+            } else {
+                this.log.warn(`Failed to save config ${key} to database`);
+            }
+
+            return result;
+        } catch (error) {
+            this.log.error('Error setting config in database:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Delete configuration value for this plugin from database
+     * @param {string} key - Configuration key
+     * @returns {Promise<boolean>}
+     */
+    async deleteConfigFromDB(key) {
+        try {
+            const pluginName = this._pluginName;
+            if (!pluginName) {
+                this.log.warn('Plugin name not set, cannot delete config from database');
+                return false;
+            }
+
+            const result = await this._configurations.deletePluginConfig(pluginName, key);
+
+            if (result) {
+                this.log.info(`Config ${key} deleted from database successfully`);
+            } else {
+                this.log.warn(`Failed to delete config ${key} from database`);
+            }
+
+            return result;
+        } catch (error) {
+            this.log.error('Error deleting config from database:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Check if configuration exists for this plugin in database
+     * @param {string} key - Configuration key
+     * @returns {Promise<boolean>}
+     */
+    async configExists(key) {
+        try {
+            const pluginName = this._pluginName;
+            if (!pluginName) {
+                this.log.warn('Plugin name not set, cannot check config existence in database');
+                return false;
+            }
+            return await this._configurations.pluginConfigExists(pluginName, key);
+        } catch (error) {
+            this.log.error('Error checking config existence in database:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Get all configurations for this plugin from database
+     * @returns {Promise<Array>}
+     */
+    async getAllConfigs() {
+        try {
+            const pluginName = this._pluginName;
+            if (!pluginName) {
+                this.log.warn('Plugin name not set, cannot get all configs from database');
+                return [];
+            }
+            return await this._configurations.getPluginConfigs(pluginName);
+        } catch (error) {
+            this.log.error('Error getting all configs from database:', error);
+            return [];
+        }
+    }
+
     // Plugin lifecycle methods
     async start() {
         this._isActive = true;
@@ -338,6 +636,10 @@ export default class Plugin {
 
         this._handlers.clear();
         this._commandRateLimit.clear();
+        
+        // Clear configuration cache
+        this._configCache.clear();
+        this._cacheExpiry.clear();
 
         this.log.info(`Plugin stopped`);
     }

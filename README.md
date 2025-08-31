@@ -190,7 +190,7 @@ export default class MyPlugin extends Plugin {
 // Message events
 onMessage, onText, onPhoto, onVideo, onAudio, onDocument, onVoice, onSticker
 
-// Chat events  
+// Chat events
 onNewChatMembers, onLeftChatMember, onNewChatTitle, onNewChatPhoto
 
 // Interactive events
@@ -216,7 +216,7 @@ return {
 
 // Status action
 return {
-    type: "chatAction", 
+    type: "chatAction",
     action: "typing"
 };
 ```
@@ -226,6 +226,88 @@ return {
 - Use built-in logger for debug/info/error logs.
 - Handle errors gracefully in plugin handlers.
 - Use try/catch for async operations.
+
+### Plugin Configuration
+
+TeleNode provides built-in configuration management for plugins with database persistence and caching.
+
+#### Getting Configuration
+
+```javascript
+// Get configuration with default value
+const apiKey = await this.getConfig('api_key', 'default_key');
+
+// Get configuration with cache refresh
+const setting = await this.getConfig('setting', null, true);
+```
+
+#### Setting Configuration
+
+```javascript
+// Set configuration value
+await this.setConfig('api_key', 'your_api_key');
+
+// Set with additional options
+await this.setConfig('setting', 'value', {
+    description: 'Custom setting description',
+    createdBy: 'admin'
+});
+```
+
+#### Configuration Management
+
+```javascript
+// Check if configuration exists
+const exists = await this.configExists('api_key');
+
+// Delete configuration
+await this.deleteConfig('old_setting');
+
+// Get all plugin configurations
+const allConfigs = await this.getAllConfigs();
+
+// Clear configuration cache
+this.clearConfigCache('specific_key'); // Clear specific key
+this.clearConfigCache(); // Clear all plugin configs
+```
+
+#### Example: API Key Management
+
+```javascript
+export default class WeatherPlugin extends Plugin {
+    get commands() {
+        return {
+            weather: this.getWeather.bind(this),
+            setapikey: this.setApiKey.bind(this)
+        };
+    }
+
+    async getWeather({message, args}) {
+        const apiKey = await this.getConfig('api_key');
+        if (!apiKey) {
+            return "Please set API key first: /setapikey YOUR_KEY";
+        }
+        
+        const city = args.join(" ");
+        // Use apiKey for weather API call
+        return `Weather for ${city}: Sunny, 25°C`;
+    }
+
+    async setApiKey({message, args}) {
+        const apiKey = args[0];
+        if (!apiKey) {
+            return "Usage: /setapikey YOUR_API_KEY";
+        }
+        
+        await this.setConfig('api_key', apiKey, {
+            description: 'Weather API key',
+            createdBy: message.from.id
+        });
+        
+        return "✅ API key saved successfully!";
+    }
+}
+```
 
 ## 🛠️ Plugin Management
 
