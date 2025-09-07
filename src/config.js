@@ -38,7 +38,7 @@ export default {
     USE_PLUGIN_MARKETPLACE: process.env.USE_PLUGIN_MARKETPLACE === 'True' || process.env.USE_PLUGIN_MARKETPLACE === 'true',
     server: {
         port: parseInt(process.env.APP_PORT) || 8001,
-        host: process.env.APP_HOST || 'localhost',
+        host: process.env.APP_HOST || '127.0.0.1',
     },
     BOT_TOKEN: process.env.BOT_TOKEN,
     BOT_SUDOERS: process.env.BOT_SUDOERS ?
