@@ -127,6 +127,23 @@ export default class Auth {
 
     async addAdmin(user_id, chat_id) {
         try {
+            // Validate inputs
+            if (!user_id || !chat_id) {
+                throw new Error('user_id and chat_id are required');
+            }
+
+            // Check if user is already admin
+            if (this.isAdmin(user_id, chat_id)) {
+                log.warn(`User ${user_id} is already admin in chat ${chat_id}`);
+                return { success: false, message: 'User is already admin' };
+            }
+
+            // Check if user exists and is not blocked
+            const userRecord = await User.where("id", user_id).first();
+            if (userRecord && userRecord.is_blocked) {
+                throw new Error('Cannot add blocked user as admin');
+            }
+
             if (await this.authorizations.addAdmin(user_id, chat_id)) {
                 if (!this.admin.some(a => a.user_id === user_id && a.chat_id === chat_id)) {
                     this.admin.push({user_id, chat_id});
@@ -136,17 +153,28 @@ export default class Auth {
                 this.clearUserCache(user_id, chat_id);
 
                 log.info(`Added admin: user_id=${user_id}, chat_id=${chat_id}`);
-                return true;
+                return { success: true, message: 'Admin added successfully' };
             }
-            return false;
+            return { success: false, message: 'Failed to add admin to database' };
         } catch (error) {
             log.error(`Failed to add admin:`, error);
-            throw error;
+            return { success: false, error: error.message };
         }
     }
 
     async removeAdmin(user_id, chat_id) {
         try {
+            // Validate inputs
+            if (!user_id || !chat_id) {
+                throw new Error('user_id and chat_id are required');
+            }
+
+            // Check if user is admin
+            if (!this.isAdmin(user_id, chat_id)) {
+                log.warn(`User ${user_id} is not admin in chat ${chat_id}`);
+                return { success: false, message: 'User is not admin' };
+            }
+
             if (await this.authorizations.removeAdmin(user_id, chat_id)) {
                 this.admin = this.admin.filter(a =>
                     !(a.user_id === user_id && a.chat_id === chat_id)
@@ -156,12 +184,12 @@ export default class Auth {
                 this.clearUserCache(user_id, chat_id);
 
                 log.info(`Removed admin: user_id=${user_id}, chat_id=${chat_id}`);
-                return true;
+                return { success: true, message: 'Admin removed successfully' };
             }
-            return false;
+            return { success: false, message: 'Failed to remove admin from database' };
         } catch (error) {
             log.error(`Failed to remove admin:`, error);
-            throw error;
+            return { success: false, error: error.message };
         }
     }
 
@@ -190,6 +218,12 @@ export default class Auth {
             return false;
         }
 
+        // ROOT users always have access - bypass all checks
+        if (this.isRoot(from.id)) {
+            log.debug(`ROOT user ${from.id} granted access (bypassed all checks)`);
+            return true;
+        }
+
         const cacheKey = this.getCacheKey('granted', from.id, chat.id);
         const cached = this.getFromCache(cacheKey);
 
@@ -213,6 +247,16 @@ export default class Auth {
                 if (!userGranted) {
                     granted = false;
                     this.metrics.blockedAttempts++;
+                }
+            }
+
+            // Check if user is banned from this specific chat
+            if (granted) {
+                const isBanned = await this.isUserBannedFromChat(from.id, chat.id);
+                if (isBanned) {
+                    granted = false;
+                    this.metrics.blockedAttempts++;
+                    log.debug(`User ${from.id} is banned from chat ${chat.id}`);
                 }
             }
 
@@ -316,71 +360,327 @@ export default class Auth {
         return false;
     }
 
-    async blockUser(user_id, reason = null) {
+    async blockUser(user_id, reason = null, blocked_by = null) {
         try {
+            // Validate inputs
+            if (!user_id) {
+                throw new Error('user_id is required');
+            }
+
+            // Prevent blocking root users
+            if (this.isRoot(user_id)) {
+                throw new Error('Cannot block root user');
+            }
+
+            // Check if user is already blocked
+            const userRecord = await User.where("id", user_id).first();
+            if (userRecord && userRecord.is_blocked) {
+                return { success: false, message: 'User is already blocked' };
+            }
+
             await User.where("id", user_id).update({
                 is_blocked: true,
-                blocked_reason: reason,
-                blocked_at: new Date()
             });
 
             this.clearUserCache(user_id);
-            log.info(`Blocked user ${user_id}. Reason: ${reason || 'No reason provided'}`);
-            return true;
+            log.info(`Blocked user ${user_id}. Reason: ${reason || 'No reason provided'}. Blocked by: ${blocked_by || 'System'}`);
+            return { success: true, message: 'User blocked successfully' };
         } catch (error) {
             log.error(`Failed to block user ${user_id}:`, error);
-            return false;
+            return { success: false, error: error.message };
         }
     }
 
-    async unblockUser(user_id) {
+    async unblockUser(user_id, unblocked_by = null) {
         try {
+            // Validate inputs
+            if (!user_id) {
+                throw new Error('user_id is required');
+            }
+
+            // Check if user is actually blocked
+            const userRecord = await User.where("id", user_id).first();
+            if (!userRecord || !userRecord.is_blocked) {
+                return { success: false, message: 'User is not blocked' };
+            }
+
             await User.where("id", user_id).update({
                 is_blocked: false,
                 blocked_reason: null,
-                blocked_at: null
+                blocked_at: null,
+                blocked_by: null,
+                unblocked_at: new Date(),
+                unblocked_by: unblocked_by
             });
 
             this.clearUserCache(user_id);
-            log.info(`Unblocked user ${user_id}`);
-            return true;
+            log.info(`Unblocked user ${user_id}. Unblocked by: ${unblocked_by || 'System'}`);
+            return { success: true, message: 'User unblocked successfully' };
         } catch (error) {
             log.error(`Failed to unblock user ${user_id}:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // ban user in a specific chat
+    async banUser(user_id, chat_id, reason = null, banned_by = null) {
+        try {
+            // Validate inputs
+            if (!user_id || !chat_id) {
+                throw new Error('user_id and chat_id are required');
+            }
+
+            // Prevent banning root users
+            if (this.isRoot(user_id)) {
+                throw new Error('Cannot ban root user from chat');
+            }
+
+            // Check if user is already banned in this chat
+            const banRecord = await this.authorizations
+                .where("user_id", user_id)
+                .where("chat_id", chat_id)
+                .where("role", "banned")
+                .first();
+
+            if (banRecord) {
+                return { success: false, message: 'User is already banned from this chat' };
+            }
+
+            // Add ban record to authorizations table
+            await this.authorizations.insertOrUpdate({
+                user_id: user_id,
+                chat_id: chat_id,
+                role: "banned",
+                granted_by: banned_by,
+                granted_at: new Date(),
+                note: reason
+            });
+
+            // Clear relevant cache entries
+            this.clearUserCache(user_id, chat_id);
+
+            log.info(`Banned user ${user_id} from chat ${chat_id}. Reason: ${reason || 'No reason provided'}. Banned by: ${banned_by || 'System'}`);
+            return { success: true, message: 'User banned from chat successfully' };
+        } catch (error) {
+            log.error(`Failed to ban user ${user_id} from chat ${chat_id}:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async unbanUser(user_id, chat_id, unbanned_by = null) {
+        try {
+            // Validate inputs
+            if (!user_id || !chat_id) {
+                throw new Error('user_id and chat_id are required');
+            }
+
+            // Check if user is actually banned in this chat
+            const banRecord = await this.authorizations
+                .where("user_id", user_id)
+                .where("chat_id", chat_id)
+                .where("role", "banned")
+                .first();
+
+            if (!banRecord) {
+                return { success: false, message: 'User is not banned from this chat' };
+            }
+
+            // Remove ban record from authorizations table
+            await this.authorizations
+                .where("user_id", user_id)
+                .where("chat_id", chat_id)
+                .where("role", "banned")
+                .delete();
+
+            // Clear relevant cache entries
+            this.clearUserCache(user_id, chat_id);
+
+            log.info(`Unbanned user ${user_id} from chat ${chat_id}. Unbanned by: ${unbanned_by || 'System'}`);
+            return { success: true, message: 'User unbanned from chat successfully' };
+        } catch (error) {
+            log.error(`Failed to unban user ${user_id} from chat ${chat_id}:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // Check if user is banned from specific chat
+    async isUserBannedFromChat(user_id, chat_id) {
+        try {
+            const banRecord = await this.authorizations
+                .where("user_id", user_id)
+                .where("chat_id", chat_id)
+                .where("role", "banned")
+                .first();
+
+            return banRecord !== null;
+        } catch (error) {
+            log.error(`Failed to check ban status for user ${user_id} in chat ${chat_id}:`, error);
             return false;
         }
     }
 
-    async blockChat(chat_id, reason = null) {
+    // Get list of banned users in a chat
+    async getBannedUsersInChat(chat_id) {
         try {
+            const bannedUsers = await this.authorizations
+                .select("user_id", "granted_by", "granted_at", "note")
+                .where("chat_id", chat_id)
+                .where("role", "banned")
+                .get();
+
+            return {
+                success: true,
+                data: bannedUsers
+            };
+        } catch (error) {
+            log.error(`Failed to get banned users for chat ${chat_id}:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // Get list of chats where user is banned
+    async getUserBannedChats(user_id) {
+        try {
+            const bannedChats = await this.authorizations
+                .select("chat_id", "granted_by", "granted_at", "note")
+                .where("user_id", user_id)
+                .where("role", "banned")
+                .get();
+
+            return {
+                success: true,
+                data: bannedChats
+            };
+        } catch (error) {
+            log.error(`Failed to get banned chats for user ${user_id}:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async blockChat(chat_id) {
+        try {
+            // Validate inputs
+            if (!chat_id) {
+                throw new Error('chat_id is required');
+            }
+
+            // Check if chat is already blocked
+            const chatRecord = await Chat.where("id", chat_id).first();
+            if (chatRecord && chatRecord.is_blocked) {
+                return { success: false, message: 'Chat is already blocked' };
+            }
+
             await Chat.where("id", chat_id).update({
                 is_blocked: true,
-                blocked_reason: reason,
-                blocked_at: new Date()
             });
 
             this.clearUserCache(null, chat_id);
-            log.info(`Blocked chat ${chat_id}. Reason: ${reason || 'No reason provided'}`);
-            return true;
+            log.info(`Blocked chat ${chat_id}.`);
+            return { success: true, message: 'Chat blocked successfully' };
         } catch (error) {
             log.error(`Failed to block chat ${chat_id}:`, error);
-            return false;
+            return { success: false, error: error.message };
         }
     }
 
     async unblockChat(chat_id) {
         try {
+            // Validate inputs
+            if (!chat_id) {
+                throw new Error('chat_id is required');
+            }
+
+            // Check if chat is actually blocked
+            const chatRecord = await Chat.where("id", chat_id).first();
+            if (!chatRecord || !chatRecord.is_blocked) {
+                return { success: false, message: 'Chat is not blocked' };
+            }
+
             await Chat.where("id", chat_id).update({
                 is_blocked: false,
-                blocked_reason: null,
-                blocked_at: null
             });
 
             this.clearUserCache(null, chat_id);
-            log.info(`Unblocked chat ${chat_id}`);
-            return true;
+            log.info(`Unblocked chat ${chat_id}. Unblocked by: ${unblocked_by || 'System'}`);
+            return { success: true, message: 'Chat unblocked successfully' };
         } catch (error) {
             log.error(`Failed to unblock chat ${chat_id}:`, error);
-            return false;
+            return { success: false, error: error.message };
+        }
+    }
+
+    // New method to get user info with blocking status
+    async getUserInfo(user_id) {
+        try {
+            const userRecord = await User.where("id", user_id).first();
+            if (!userRecord) {
+                return { success: false, message: 'User not found' };
+            }
+
+            return {
+                success: true,
+                data: {
+                    id: userRecord.id,
+                    username: userRecord.username,
+                    first_name: userRecord.first_name,
+                    last_name: userRecord.last_name,
+                    is_blocked: userRecord.is_blocked,
+                    blocked_reason: userRecord.blocked_reason,
+                    blocked_at: userRecord.blocked_at,
+                    blocked_by: userRecord.blocked_by,
+                    is_root: this.isRoot(user_id),
+                    admin_chats: this.admin.filter(a => a.user_id === user_id).map(a => a.chat_id)
+                }
+            };
+        } catch (error) {
+            log.error(`Failed to get user info for ${user_id}:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // New method to get chat info with blocking status
+    async getChatInfo(chat_id) {
+        try {
+            const chatRecord = await Chat.where("id", chat_id).first();
+            if (!chatRecord) {
+                return { success: false, message: 'Chat not found' };
+            }
+
+            return {
+                success: true,
+                data: {
+                    id: chatRecord.id,
+                    title: chatRecord.title,
+                    type: chatRecord.type,
+                    is_blocked: chatRecord.is_blocked,
+                    blocked_reason: chatRecord.blocked_reason,
+                    blocked_at: chatRecord.blocked_at,
+                    blocked_by: chatRecord.blocked_by,
+                    admins: this.admin.filter(a => a.chat_id === chat_id).map(a => a.user_id)
+                }
+            };
+        } catch (error) {
+            log.error(`Failed to get chat info for ${chat_id}:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // New method to list all admins
+    async listAdmins(chat_id = null) {
+        try {
+            if (chat_id) {
+                return {
+                    success: true,
+                    data: this.admin.filter(a => a.chat_id === chat_id)
+                };
+            }
+            return {
+                success: true,
+                data: this.admin
+            };
+        } catch (error) {
+            log.error('Failed to list admins:', error);
+            return { success: false, error: error.message };
         }
     }
 

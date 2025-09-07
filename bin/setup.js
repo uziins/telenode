@@ -103,7 +103,10 @@ async function preparingDatabase() {
                 'user_id INT NOT NULL,' +
                 'chat_id INT NOT NULL,' +
                 'PRIMARY KEY (user_id, chat_id),' +
-                'role ENUM("root", "admin", "user") DEFAULT "user",' +
+                'role ENUM("root", "admin", "user", "banned") DEFAULT "user",' +
+                'granted_by INT,' +
+                'granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,' +
+                'note TEXT,' +
                 'updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,' +
                 'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)').then(() => {
                 console.log('Table authorizations created')

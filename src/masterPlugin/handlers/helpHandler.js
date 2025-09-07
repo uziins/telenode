@@ -10,6 +10,7 @@ export default class HelpHandler {
 
     async handleGlobalHelp({message}) {
         const userId = message.from.id;
+        const chatId = message.chat.id;
 
         let helpText = ``;
 
@@ -46,7 +47,7 @@ export default class HelpHandler {
             if (pluginVisibility === Plugin.VISIBILITY.USER) {
                 canAccess = true;
             } else if (pluginVisibility === Plugin.VISIBILITY.ADMIN) {
-                canAccess = this.auth.isAdmin(userId) || this.auth.isRoot(userId);
+                canAccess = this.auth.isAdmin(userId, chatId) || this.auth.isRoot(userId);
             } else if (pluginVisibility === Plugin.VISIBILITY.ROOT) {
                 canAccess = this.auth.isRoot(userId);
             }
@@ -76,7 +77,7 @@ export default class HelpHandler {
                 }
             }
 
-            if (adminPlugins.length > 0 && (this.auth.isAdmin(userId) || this.auth.isRoot(userId))) {
+            if (adminPlugins.length > 0 && (this.auth.isAdmin(userId, chatId) || this.auth.isRoot(userId))) {
                 helpText += `🛡️ *Admin Help:*\n`;
                 for (const plugin of adminPlugins) {
                     helpText += `🔹 *${plugin.name}*\n${plugin.help}\n\n`;

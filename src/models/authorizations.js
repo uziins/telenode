@@ -6,7 +6,7 @@ export default class Authorizations extends Model {
 
         this.table = "authorizations";
         this.softDelete = false;
-        this.fillable = ["user_id", "chat_id", "role"];
+        this.fillable = ["user_id", "chat_id", "role", "granted_by", "granted_at", "note"];
     }
 
     async getRole(user_id, chat_id) {
