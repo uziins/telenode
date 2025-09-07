@@ -45,6 +45,8 @@ program
     .option('--deps <deps>', 'Comma-separated list of dependencies (format: package@version)')
     .action(async (name, options) => {
         try {
+            const sanitizedName = packageManager.sanitizePluginName(name);
+
             const dependencies = {};
             if (options.deps) {
                 options.deps.split(',').forEach(dep => {
@@ -67,7 +69,7 @@ program
                 process.exit(1);
             }
 
-            const result = await packageManager.createPluginTemplate(name, {
+            const result = await packageManager.createPluginTemplate(sanitizedName, {
                 description: options.description,
                 author: options.author,
                 visibility: options.visibility.toUpperCase(),
@@ -77,28 +79,28 @@ program
                 dependencies
             });
 
-            console.log(`✅ Plugin "${name}" created successfully at ${result.path}`);
+            console.log(`✅ Plugin "${sanitizedName}" created successfully at ${result.path}`);
             console.log(`📁 Files created:`);
             console.log(`   - index.js (main plugin file)`);
             console.log(`   - package.json (metadata & dependencies)`);
             console.log(`   - README.md (documentation)`);
 
             console.log(`\n📋 Plugin Info:`);
-            console.log(`   - Name: ${name}`);
-            console.log(`   - Description: ${options.description || `A TeleNode plugin for ${name}`}`);
+            console.log(`   - Name: ${sanitizedName}`);
+            console.log(`   - Description: ${options.description || `A TeleNode plugin for ${sanitizedName}`}`);
             console.log(`   - Author: ${options.author || 'TeleNode Developer'}`);
             console.log(`   - Visibility: ${options.visibility.toUpperCase()}`);
             console.log(`   - Category: ${options.category}`);
 
             if (Object.keys(dependencies).length > 0) {
                 console.log(`\n📦 Installing dependencies...`);
-                await packageManager.installPluginDependencies(name);
+                await packageManager.installPluginDependencies(sanitizedName);
                 console.log(`✅ Dependencies installed successfully`);
             }
 
             console.log(`\n🚀 Next steps:`);
-            console.log(`   1. Edit plugins/${name}/index.js to implement your plugin logic`);
-            console.log(`   2. Update plugins/${name}/package.json if needed`);
+            console.log(`   1. Edit plugins/${sanitizedName}/index.js to implement your plugin logic`);
+            console.log(`   2. Update plugins/${sanitizedName}/package.json if needed`);
             console.log(`   3. Test your plugin with TeleNode`);
         } catch (error) {
             console.error(`❌ Error creating plugin: ${error.message}`);
@@ -112,8 +114,9 @@ program
     .action(async (plugin) => {
         try {
             if (plugin) {
-                console.log(`📦 Installing dependencies for plugin: ${plugin}`);
-                const result = await packageManager.installPluginDependencies(plugin);
+                const sanitized = packageManager.sanitizePluginName(plugin);
+                console.log(`📦 Installing dependencies for plugin: ${sanitized}`);
+                const result = await packageManager.installPluginDependencies(sanitized);
                 if (result.success) {
                     console.log(`✅ ${result.message}`);
                 } else {
@@ -164,6 +167,7 @@ program
     });
 
 async function checkSinglePlugin(pluginName) {
+    pluginName = packageManager.sanitizePluginName(pluginName);
     const status = await packageManager.checkPluginDependencies(pluginName);
 
     console.log(`\n🔧 Plugin: ${pluginName}`);
@@ -193,6 +197,8 @@ program
     .option('-f, --force', 'Force removal without confirmation')
     .action(async (plugin, options) => {
         try {
+            const sanitized = packageManager.sanitizePluginName(plugin);
+
             if (!options.force) {
                 const readline = await import('readline');
                 const rl = readline.createInterface({
@@ -201,7 +207,7 @@ program
                 });
 
                 const answer = await new Promise(resolve => {
-                    rl.question(`❓ Are you sure you want to remove plugin "${plugin}"? (y/N): `, resolve);
+                    rl.question(`❓ Are you sure you want to remove plugin "${sanitized}"? (y/N): `, resolve);
                 });
                 rl.close();
 
@@ -211,8 +217,8 @@ program
                 }
             }
 
-            await packageManager.removePlugin(plugin);
-            console.log(`✅ Plugin "${plugin}" removed successfully`);
+            await packageManager.removePlugin(sanitized);
+            console.log(`✅ Plugin "${sanitized}" removed successfully`);
         } catch (error) {
             console.error(`❌ Error removing plugin: ${error.message}`);
             process.exit(1);

@@ -13,9 +13,26 @@ export default class PluginPackageManager {
     }
 
     /**
+     * Sanitize plugin name to only allow lowercase letters, numbers, hyphens and underscores
+     */
+    sanitizePluginName(pluginName) {
+        if (!pluginName || typeof pluginName !== 'string') {
+            throw new Error('Plugin name is required and must be a string');
+        }
+
+        const sanitizedName = pluginName.toLowerCase().replace(/[^a-z0-9-_]/g, '');
+        if (!sanitizedName) {
+            throw new Error('Invalid plugin name. Use only letters, numbers, hyphens, and underscores');
+        }
+
+        return sanitizedName;
+    }
+
+    /**
      * Install dependencies for a specific plugin
      */
     async installPluginDependencies(pluginName) {
+        pluginName = this.sanitizePluginName(pluginName);
         const pluginDir = path.join(this.pluginsDir, pluginName);
         const packageJsonPath = path.join(pluginDir, 'package.json');
 
@@ -74,6 +91,7 @@ export default class PluginPackageManager {
      * Check plugin dependencies status
      */
     async checkPluginDependencies(pluginName) {
+        pluginName = this.sanitizePluginName(pluginName);
         const pluginDir = path.join(this.pluginsDir, pluginName);
         const packageJsonPath = path.join(pluginDir, 'package.json');
         const nodeModulesPath = path.join(pluginDir, 'node_modules');
@@ -112,16 +130,7 @@ export default class PluginPackageManager {
      * Create plugin template with package.json
      */
     async createPluginTemplate(pluginName, options = {}) {
-        // Validate plugin name
-        if (!pluginName || typeof pluginName !== 'string') {
-            throw new Error('Plugin name is required and must be a string');
-        }
-
-        // Sanitize plugin name
-        const sanitizedName = pluginName.toLowerCase().replace(/[^a-z0-9-_]/g, '');
-        if (!sanitizedName) {
-            throw new Error('Invalid plugin name. Use only letters, numbers, hyphens, and underscores');
-        }
+        const sanitizedName = this.sanitizePluginName(pluginName);
 
         const pluginDir = path.join(this.pluginsDir, sanitizedName);
 
@@ -176,6 +185,7 @@ export default class PluginPackageManager {
      * Remove plugin and its dependencies
      */
     async removePlugin(pluginName) {
+        pluginName = this.sanitizePluginName(pluginName);
         const pluginDir = path.join(this.pluginsDir, pluginName);
         
         if (!fs.existsSync(pluginDir)) {
