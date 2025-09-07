@@ -12,17 +12,46 @@ export default class CacheHandler {
         const authStats = this.auth.getStats();
 
         let text = `🗃 *Cache Statistics*\n\n`;
-        text += `🎯 Hit Rate: ${cacheStats.hitRate}\n`;
-        text += `📦 Size: ${cacheStats.size}/${cacheStats.maxSize}\n`;
-        text += `💾 Memory: ${cacheStats.memoryUsage}\n`;
-        text += `📈 Hits: ${cacheStats.hits}\n`;
-        text += `📉 Misses: ${cacheStats.misses}\n`;
-        text += `🗑️ Evictions: ${cacheStats.evictions}\n\n`;
 
+        // Global Cache Statistics
+        text += `🎯 Hit Rate: ${cacheStats.hitRate || 'N/A'}%\n`;
+        text += `📦 Size: ${cacheStats.size || 0}/${cacheStats.maxSize || 'N/A'}\n`;
+        text += `💾 Memory: ${cacheStats.memoryUsage || 'N/A'}\n`;
+        text += `📈 Hits: ${cacheStats.hits || 0}\n`;
+        text += `📉 Misses: ${cacheStats.misses || 0}\n`;
+        text += `🗑️ Evictions: ${cacheStats.evictions || 0}\n\n`;
+
+        // Auth Cache Statistics (updated structure)
         text += `🔐 *Auth Cache*\n`;
-        text += `📦 Size: ${authStats.cacheSize}/${authStats.maxCacheSize}\n`;
-        text += `👥 Admins: ${authStats.adminCount}\n`;
-        text += `🔑 Root Users: ${authStats.rootUsersCount}\n`;
+        text += `📦 Size: ${authStats.cache.size}/${authStats.cache.maxSize}\n`;
+        text += `🎯 Hit Rate: ${authStats.cache.hitRate}%\n`;
+        text += `📈 Hits: ${authStats.cache.hits}\n`;
+        text += `📉 Misses: ${authStats.cache.misses}\n`;
+        text += `🧹 Cleanups: ${authStats.cache.totalCleanups}\n`;
+        text += `⏱️ Timeout: ${Math.round(authStats.cache.timeoutMs / 1000)}s\n\n`;
+
+        // Authorization Statistics
+        text += `👥 *Authorization*\n`;
+        text += `🔑 Admins: ${authStats.authorization.adminCount}\n`;
+        text += `👑 Root Users: ${authStats.authorization.rootUsersCount}\n`;
+        text += `🔍 Total Checks: ${authStats.authorization.totalAuthChecks}\n`;
+        text += `🚫 Blocked: ${authStats.authorization.blockedAttempts}\n`;
+        text += `📊 Block Rate: ${authStats.authorization.blockRate}%\n\n`;
+
+        // Performance Metrics
+        text += `⚡ *Performance*\n`;
+        text += `⏰ Uptime: ${authStats.performance.uptime.hours}h ${authStats.performance.uptime.minutes % 60}m\n`;
+        text += `🚀 Avg Response: ${authStats.performance.avgResponseTime}ms\n`;
+        text += `💾 Memory Used: ${authStats.system.memoryUsage.heapUsed}MB\n`;
+        text += `💿 Total Memory: ${authStats.system.memoryUsage.heapTotal}MB\n\n`;
+
+        // Database Status
+        text += `🗄️ *Database*\n`;
+        text += `🔗 Connections: ${authStats.database.connectionCount}\n`;
+        authStats.database.connections.forEach(conn => {
+            const statusIcon = conn.status === 'active' ? '✅' : conn.status === 'error' ? '❌' : '⚠️';
+            text += `${statusIcon} ${conn.type}: ${conn.status}\n`;
+        });
 
         return {
             type: "text",
