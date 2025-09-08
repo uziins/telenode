@@ -360,7 +360,7 @@ export default class Auth {
         return false;
     }
 
-    async blockUser(user_id, reason = null, blocked_by = null) {
+    async blockUser(user_id) {
         try {
             // Validate inputs
             if (!user_id) {
@@ -383,7 +383,7 @@ export default class Auth {
             });
 
             this.clearUserCache(user_id);
-            log.info(`Blocked user ${user_id}. Reason: ${reason || 'No reason provided'}. Blocked by: ${blocked_by || 'System'}`);
+            log.info(`Blocked user ${user_id}.`);
             return { success: true, message: 'User blocked successfully' };
         } catch (error) {
             log.error(`Failed to block user ${user_id}:`, error);
@@ -391,7 +391,7 @@ export default class Auth {
         }
     }
 
-    async unblockUser(user_id, unblocked_by = null) {
+    async unblockUser(user_id) {
         try {
             // Validate inputs
             if (!user_id) {
@@ -405,16 +405,11 @@ export default class Auth {
             }
 
             await User.where("id", user_id).update({
-                is_blocked: false,
-                blocked_reason: null,
-                blocked_at: null,
-                blocked_by: null,
-                unblocked_at: new Date(),
-                unblocked_by: unblocked_by
+                is_blocked: false
             });
 
             this.clearUserCache(user_id);
-            log.info(`Unblocked user ${user_id}. Unblocked by: ${unblocked_by || 'System'}`);
+            log.info(`Unblocked user ${user_id}.`);
             return { success: true, message: 'User unblocked successfully' };
         } catch (error) {
             log.error(`Failed to unblock user ${user_id}:`, error);
@@ -609,7 +604,6 @@ export default class Auth {
         }
     }
 
-    // New method to get user info with blocking status
     async getUserInfo(user_id) {
         try {
             const userRecord = await User.where("id", user_id).first();
@@ -625,9 +619,7 @@ export default class Auth {
                     first_name: userRecord.first_name,
                     last_name: userRecord.last_name,
                     is_blocked: userRecord.is_blocked,
-                    blocked_reason: userRecord.blocked_reason,
-                    blocked_at: userRecord.blocked_at,
-                    blocked_by: userRecord.blocked_by,
+                    is_bot: userRecord.is_bot,
                     is_root: this.isRoot(user_id),
                     admin_chats: this.admin.filter(a => a.user_id === user_id).map(a => a.chat_id)
                 }
