@@ -16,8 +16,8 @@ export default class Auth {
 
         // Caching system
         this.cache = new Map();
-        this.cacheTimeout = config.cache.ttl * 1000; // Convert to milliseconds
-        this.maxCacheSize = config.cache.maxSize;
+        this.cacheTimeout = ((config.cache?.ttl ?? 60) * 1000); // Default to 60 seconds if undefined
+        this.maxCacheSize = config.cache?.maxSize ?? 1000; // Default to 1000 if undefined
 
         // Store database connections for cleanup
         this.dbConnections = [this.authorizations, Chat, User];
