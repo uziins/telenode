@@ -93,7 +93,7 @@ export default class Marketplace {
             this.log.error(`Failed to get download URL for plugin ${pluginCode}:`, error);
             return JSON.parse(error.data) || {
                 success: false,
-                error: error.message
+                error: error?.message || 'Unknown error'
             }
         }
     }

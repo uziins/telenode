@@ -15,7 +15,7 @@ async function testAuthHelper() {
     try {
         const { default: Auth } = await import('./src/helpers/auth.js');
 
-        // Mock config untuk testing
+        // Mock config for testing
         process.env.NODE_ENV = 'test';
 
         const auth = new Auth();
@@ -24,7 +24,7 @@ async function testAuthHelper() {
         const isRootResult = auth.isRoot(123456789);
         console.log(`✅ Auth.isRoot() works: ${isRootResult}`);
 
-        // Test cleanup - ini yang mengatasi masalah MySQL connection!
+        // Test cleanup - this resolves MySQL connection issues!
         await auth.destroy();
         console.log('✅ Auth.destroy() works - MySQL connections cleaned up');
 
