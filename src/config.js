@@ -25,8 +25,8 @@ function validateEnvVar(name, value, type = 'string') {
 }
 
 // Validate critical environment variables
-validateEnvVar('BOT_TOKEN', process.env.BOT_TOKEN);
-validateEnvVar('APP_PORT', process.env.APP_PORT, 'number');
+// validateEnvVar('BOT_TOKEN', process.env.BOT_TOKEN);
+// validateEnvVar('APP_PORT', process.env.APP_PORT, 'number');
 
 export default {
     APP_NAME: process.env.APP_NAME || 'TeleNode',
