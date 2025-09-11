@@ -596,7 +596,7 @@ export default class Auth {
             });
 
             this.clearUserCache(null, chat_id);
-            log.info(`Unblocked chat ${chat_id}. Unblocked by: ${unblocked_by || 'System'}`);
+            log.info(`Unblocked chat ${chat_id}.`);
             return { success: true, message: 'Chat unblocked successfully' };
         } catch (error) {
             log.error(`Failed to unblock chat ${chat_id}:`, error);
