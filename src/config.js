@@ -65,5 +65,5 @@ export default {
         maxSize: parseInt(process.env.CACHE_MAX_SIZE) || 1000,
     },
     // Marketplace Configuration
-    MARKETPLACE_URL: 'https://telenode.iluzi.id/api',
+    MARKETPLACE_URL: 'https://telenode.dev/api',
 }
