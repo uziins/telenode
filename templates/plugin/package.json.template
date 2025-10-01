@@ -1,0 +1,26 @@
+{
+  "name": "{{IDENTIFIER}}",
+  "version": "1.0.0",
+  "description": "{{DESCRIPTION}}",
+  "main": "index.js",
+  "type": "module",
+  "keywords": ["telenode", "telegram", "bot", "plugin"],
+  "author": "{{AUTHOR}}",
+  "license": "{{LICENSE}}",
+  "dependencies": {{DEPENDENCIES}},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "plugin": {
+    "displayName": "{{CLASS_NAME}}",
+    "help": "{{HELP}}",
+    "visibility": "{{VISIBILITY}}",
+    "type": "{{TYPE}}",
+    "category": "{{CATEGORY}}"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-repo/{{IDENTIFIER}}.git"
+  }
+}

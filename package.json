@@ -1,0 +1,81 @@
+{
+  "name": "telenode",
+  "version": "1.0.0",
+  "description": "A high-performance plugin-based Telegram Bot framework with advanced monitoring and caching",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js --inspect",
+    "test": "node test.js",
+    "logs": "tail -f logs/*.log",
+    "clean": "rm -rf logs/*.log",
+    "setup": "node bin/setup.js",
+    "install-plugins": "node bin/plugin-cli.js install",
+    "plugin:create": "node bin/plugin-cli.js create",
+    "plugin:install": "node bin/plugin-cli.js install",
+    "plugin:check": "node bin/plugin-cli.js check",
+    "plugin:list": "node bin/plugin-cli.js list",
+    "plugin:remove": "node bin/plugin-cli.js remove",
+    "pm2:start": "pm2 start npm --name telenode -- start",
+    "pm2:stop": "pm2 stop telenode",
+    "pm2:restart": "pm2 restart telenode",
+    "pm2:logs": "pm2 logs telenode"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "commander": "^14.0.0",
+    "express": "^4.18.3",
+    "inquirer": "^9.2.19",
+    "letsql": "^1.2.0",
+    "node-telegram-bot-api": "^0.66.0",
+    "winston": "^3.13.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.3.1",
+    "nodemon": "^3.0.1",
+    "sinon": "^21.0.0",
+    "supertest": "^7.1.4"
+  },
+  "optionalDependencies": {
+    "pm2": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "author": {
+    "name": "uziins",
+    "email": "",
+    "url": ""
+  },
+  "contributors": [
+    {
+      "name": "TeleNode Framework Contributors",
+      "url": "https://github.com/uziins/telenode"
+    }
+  ],
+  "license": "MIT",
+  "keywords": [
+    "telegram",
+    "bot",
+    "framework",
+    "plugin",
+    "nodejs",
+    "monitoring",
+    "performance",
+    "scalable"
+  ],
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uziins/telenode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/uziins/telenode/issues"
+  },
+  "homepage": "https://github.com/uziins/telenode#readme",
+  "config": {
+    "unsafe-perm": true
+  }
+}
