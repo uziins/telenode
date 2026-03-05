@@ -1,13 +1,21 @@
 import {config} from "dotenv";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const envPath = path.join(process.cwd(), '.env');
+// Resolve the project root relative to this file's location (src/config.js -> ../),
+// making .env loading independent of process.cwd(). This prevents issues when pm2
+// or other process managers invoke the app from a different working directory.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.join(__dirname, '..');
+const envPath = path.join(projectRoot, '.env');
+
 if (!fs.existsSync(envPath)) {
     console.error('No .env file found. Please create one and try again.');
     process.exit(1);
 }
-config();
+config({ path: envPath });
 
 // Validation function for required environment variables
 function validateEnvVar(name, value, type = 'string') {
