@@ -3,6 +3,7 @@ import Logger from "./logger.js";
 import TelegramBot from "node-telegram-bot-api";
 import PluginManager from "./pluginManager.js";
 import express from "express";
+import { createConnection } from "mysql2/promise";
 
 const log = Logger(Config.APP_NAME, 'main', Config.LOG_LEVEL);
 let bot;
@@ -60,6 +61,23 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 (async () => {
     try {
         log.verbose('Starting the bot...');
+
+        // Validate database connection before proceeding
+        try {
+            const conn = await createConnection({
+                host: Config.db.host,
+                port: Config.db.port,
+                user: Config.db.user,
+                password: Config.db.password,
+                database: Config.db.database,
+            });
+            await conn.end();
+            log.info('Database connection verified successfully');
+        } catch (dbError) {
+            log.error(`Database connection failed: ${dbError.message}`);
+            log.error('Please verify your DB_HOST, DB_PORT, DB_USER, DB_PASSWORD and DB_DATABASE values in .env');
+            process.exit(1);
+        }
 
         if (Config.UPDATE_MODE === 'webhook') {
             bot = new TelegramBot(Config.BOT_TOKEN);
